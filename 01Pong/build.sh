@@ -1,0 +1,1 @@
+gcc -o out/01Pong src/main.cpp `sdl2-config --cflags --libs`
