@@ -1,0 +1,56 @@
+static float lerp(float a, float b, float f) {
+	return a + (b - a) * f;
+}
+
+static float length(float x, float y) {
+	return SDL_sqrtf(x * x + y * y);
+}
+
+static float to_radians(float deg) {
+	return deg / 180.0f * M_PI;
+}
+
+static float to_degrees(float rad) {
+	return rad / M_PI * 180.0f;
+}
+
+static float lengthdir_x(float len, float dir) {
+	return SDL_cosf(to_radians(dir)) * len;
+}
+
+static float lengthdir_y(float len, float dir) {
+	return -SDL_sinf(to_radians(dir)) * len;
+}
+
+static float angle_wrap(float deg) {
+	deg = SDL_fmodf(deg, 360.0f);
+	if (deg < 0.0f) {
+		deg += 360.0f;
+	}
+	return deg;
+}
+
+static float angle_difference(float dest, float src) {
+	float res = dest - src;
+	res = angle_wrap(res + 180.0f) - 180.0f;
+	return res;
+}
+
+static void normalize0(float x, float y, float* out_x, float* out_y) {
+	float l = length(x, y);
+	if (l == 0.0f) {
+		*out_x = 0.0f;
+		*out_y = 0.0f;
+	} else {
+		*out_x = x / l;
+		*out_y = y / l;
+	}
+}
+
+static float point_direction_rad(float x1, float y1, float x2, float y2) {
+    return SDL_atan2f(y1 - y2, x2 - x1);
+}
+
+static float point_direction(float x1, float y1, float x2, float y2) {
+	return to_degrees(point_direction_rad(x1, y1, x2, y2));
+}

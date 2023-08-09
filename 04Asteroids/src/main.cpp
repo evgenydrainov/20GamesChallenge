@@ -1,9 +1,17 @@
+//
+// https://20_games_challenge.gitlab.io/games/asteroids/
+//
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+
+#include "mathh.h"
 
 #define GAME_W 1280
 #define GAME_H 720
@@ -16,6 +24,8 @@
 #define MAX_BULLETS 1000
 #define MAX_PLR_BULLETS 1000
 #define ArrayLength(a) (sizeof(a) / sizeof(*a))
+#define MAP_W 10'000.0f
+#define MAP_H 10'000.0f
 
 struct Player {
 	float x;
@@ -29,8 +39,8 @@ struct Player {
 struct Enemy {
 	float x;
 	float y;
-
-	float t;
+	float radius;
+	int type;
 };
 
 struct Bullet {
@@ -56,11 +66,20 @@ struct Game {
 
 	SDL_Texture* tex_player_ship;
 	SDL_Texture* tex_bg;
+	SDL_Texture* tex_bg1;
+	SDL_Texture* tex_asteroid1;
+	SDL_Texture* tex_asteroid2;
+	SDL_Texture* tex_asteroid3;
+
+	TTF_Font* fnt_mincho;
 
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	double prev_time;
 	bool quit;
+	double fps_sum;
+	double fps_timer;
+	SDL_Texture* fps_texture;
 
 	void Init();
 	void Quit();
@@ -83,9 +102,17 @@ enum {
 
 Game* game;
 
+static double GetTime() {
+	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
+}
+
 void Game::Init() {
+	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
+
 	SDL_Init(SDL_INIT_VIDEO);
 	IMG_Init(IMG_INIT_PNG);
+	TTF_Init();
+	Mix_Init(MIX_INIT_OGG);
 
 	window = SDL_CreateWindow("04Asteroids",
 							  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -99,10 +126,16 @@ void Game::Init() {
 	SDL_RenderSetLogicalSize(renderer, GAME_W, GAME_H);
 
 	tex_player_ship = IMG_LoadTexture(renderer, "assets/player_ship.png");
-	tex_bg = IMG_LoadTexture(renderer, "assets/bg.png");
+	tex_bg          = IMG_LoadTexture(renderer, "assets/bg.png"); // https://deep-fold.itch.io/space-background-generator
+	tex_bg1         = IMG_LoadTexture(renderer, "assets/bg1.png");
+	tex_asteroid1   = IMG_LoadTexture(renderer, "assets/asteroid1.png");
+	tex_asteroid2   = IMG_LoadTexture(renderer, "assets/asteroid2.png");
+	tex_asteroid3   = IMG_LoadTexture(renderer, "assets/asteroid3.png");
 
-	player.x = (float)GAME_W / 2.0f;
-	player.y = (float)GAME_H / 2.0f;
+	fnt_mincho = TTF_OpenFont("assets/mincho.ttf", 22);
+
+	player.x = (float)MAP_W / 2.0f;
+	player.y = (float)MAP_H / 2.0f;
 
 	camera_x = player.x - (float)GAME_W / 2.0f;
 	camera_y = player.y - (float)GAME_H / 2.0f;
@@ -113,80 +146,41 @@ void Game::Init() {
 
 	{
 		Enemy* e = CreateEnemy();
-		e->x = GAME_W;
-		e->y = GAME_H;
+		e->x = MAP_W / 2.0f + GAME_W / 2.0f;
+		e->y = MAP_H / 2.0f + GAME_H / 2.0f;
+		e->radius = 50.0f;
+		e->type = 3;
 	}
+
+	// prev_time = GetTime() - (1.0 / (double)GAME_FPS);
 }
 
 void Game::Quit() {
+	SDL_DestroyTexture(fps_texture);
+
 	free(p_bullets);
 	free(bullets);
 	free(enemies);
 
-	SDL_DestroyTexture(tex_player_ship);
+	TTF_CloseFont(fnt_mincho);
+
+	SDL_DestroyTexture(tex_asteroid3);
+	SDL_DestroyTexture(tex_asteroid2);
+	SDL_DestroyTexture(tex_asteroid1);
+	SDL_DestroyTexture(tex_bg1);
 	SDL_DestroyTexture(tex_bg);
+	SDL_DestroyTexture(tex_player_ship);
 
-	SDL_DestroyWindow(window);
 	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
 
+	Mix_Quit();
+	TTF_Quit();
 	IMG_Quit();
 	SDL_Quit();
 }
 
-static double GetTime() {
-	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
-}
-
-static float lerp(float a, float b, float f) {
-	return a + (b - a) * f;
-}
-
-static float length(float x, float y) {
-	return SDL_sqrtf(x * x + y * y);
-}
-
-static float to_radians(float deg) {
-	return deg / 180.0f * M_PI;
-}
-
-static float to_degrees(float rad) {
-	return rad / M_PI * 180.0f;
-}
-
-static float lengthdir_x(float len, float dir) {
-	return SDL_cosf(to_radians(dir)) * len;
-}
-
-static float lengthdir_y(float len, float dir) {
-	return -SDL_sinf(to_radians(dir)) * len;
-}
-
-static float angle_wrap(float deg) {
-	deg = SDL_fmodf(deg, 360.0f);
-	if (deg < 0.0f) {
-		deg += 360.0f;
-	}
-	return deg;
-}
-
-static float angle_difference(float dest, float src) {
-	float res = dest - src;
-	res = angle_wrap(res + 180.0f) - 180.0f;
-	return res;
-}
-
-static void normalize0(float x, float y, float* out_x, float* out_y) {
-	float l = length(x, y);
-	if (l == 0.0f) {
-		*out_x = 0.0f;
-		*out_y = 0.0f;
-	} else {
-		*out_x = x / l;
-		*out_y = y / l;
-	}
-}
-
-static void DrawCircle(float x, float y, float radius) {
+static void DrawCircleCam(float x, float y, float radius, SDL_Color color = {255, 255, 255, 255}) {
 	constexpr int precision = 12;
 
 	for (int i = 0; i < precision; i++) {
@@ -197,12 +191,51 @@ static void DrawCircle(float x, float y, float radius) {
 		vertices[0].position = {x, y};
 		vertices[1].position = {x + lengthdir_x(radius, dir), y + lengthdir_y(radius, dir)};
 		vertices[2].position = {x + lengthdir_x(radius, dir1), y + lengthdir_y(radius, dir1)};
-		vertices[0].color = {255, 255, 255, 255};
-		vertices[1].color = {255, 255, 255, 255};
-		vertices[2].color = {255, 255, 255, 255};
+		vertices[0].color = color;
+		vertices[1].color = color;
+		vertices[2].color = color;
+
+		vertices[0].position.x -= game->camera_x;
+		vertices[1].position.x -= game->camera_x;
+		vertices[2].position.x -= game->camera_x;
+
+		vertices[0].position.y -= game->camera_y;
+		vertices[1].position.y -= game->camera_y;
+		vertices[2].position.y -= game->camera_y;
 
 		SDL_RenderGeometry(game->renderer, nullptr, vertices, ArrayLength(vertices), nullptr, 0);
 	}
+}
+
+template <typename Obj>
+static Obj* find_closest(Obj* objects, int object_count, float x, float y) {
+	Obj* result = nullptr;
+	float dist_sq = INFINITY;
+	for (int i = 0; i < object_count; i++) {
+		float dx = x - objects[i].x;
+		float dy = y - objects[i].y;
+		float d = dx * dx + dy * dy;
+		if (d < dist_sq) {
+			result = &objects[i];
+			dist_sq = d;
+		}
+	}
+	return result;
+}
+
+static void DrawTextureCentered(SDL_Texture* texture, float x, float y, float angle = 0.0f) {
+	int w;
+	int h;
+	SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
+
+	SDL_FRect dest = {
+		x - (float)w / 2.0f - game->camera_x,
+		y - (float)h / 2.0f - game->camera_y,
+		(float)w,
+		(float)h
+	};
+	
+	SDL_RenderCopyExF(game->renderer, texture, nullptr, &dest, (double)(-angle), nullptr, SDL_FLIP_NONE);
 }
 
 void Game::Run() {
@@ -216,10 +249,8 @@ void Game::Frame() {
 
 	double frame_end_time = time + (1.0 / (double)GAME_FPS);
 
-	double fps = 1.0 / (time - prev_time);
+	fps_sum += 1.0 / (time - prev_time);
 	prev_time = time;
-
-	//SDL_Log("%f", fps);
 
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
@@ -232,6 +263,23 @@ void Game::Frame() {
 	}
 
 	float delta = 1.0f;
+
+	fps_timer += delta;
+	if (fps_timer >= 60.0f || !fps_texture) {
+		double fps = fps_sum / fps_timer;
+
+		if (fps_texture) SDL_DestroyTexture(fps_texture);
+
+		char buf[10];
+		SDL_snprintf(buf, sizeof(buf), "%f", fps);
+		SDL_Surface* surf = TTF_RenderText_Blended(fnt_mincho, buf, {255, 255, 255, 255});
+		
+		fps_texture = SDL_CreateTextureFromSurface(renderer, surf);
+		SDL_FreeSurface(surf);
+		
+		fps_timer = 0.0f;
+		fps_sum = 0.0f;
+	}
 
 	// input
 	{
@@ -276,7 +324,12 @@ void Game::Frame() {
 
 			decelerate(PLAYER_ACC * 2.0f);
 
-			
+			if (Enemy* e = find_closest(enemies, enemy_count, p->x, p->y)) {
+				constexpr float f = 1.0f - 0.05f;
+				float dir = point_direction(p->x, p->y, e->x, e->y);
+				float target = p->dir - angle_difference(p->dir, dir);
+				p->dir = lerp(p->dir, target, 1.0f - SDL_powf(f, delta));
+			}
 		} else {
 			{
 				float turn_spd = PLAYER_TURN_SPD;
@@ -307,6 +360,11 @@ void Game::Frame() {
 		p->x += p->hsp * delta;
 		p->y += p->vsp * delta;
 
+		if (p->x < 0.0f) {p->x += 10'000.0f; camera_x += 10'000.0f;}
+		if (p->y < 0.0f) {p->y += 10'000.0f; camera_y += 10'000.0f;}
+		if (p->x >= 10'000.0f) {p->x -= 10'000.0f; camera_x -= 10'000.0f;}
+		if (p->y >= 10'000.0f) {p->y -= 10'000.0f; camera_y -= 10'000.0f;}
+
 		if (input_press & INPUT_FIRE) {
 			Bullet* pb = CreatePlrBullet();
 			pb->x = p->x;
@@ -327,27 +385,7 @@ void Game::Frame() {
 
 		for (int i = 0; i < enemy_count; i++) {
 			Enemy* e = &enemies[i];
-			e->t += delta;
-			if (e->t > 60.0f) {
-				Bullet* b = CreateBullet();
-				b->x = e->x;
-				b->y = e->y;
-
-				// b->hsp = p->hsp;
-				// b->vsp = p->vsp;
-				
-				float dx = p->x - e->x;
-				float dy = p->y - e->y;
-				float l = length(dx, dy);
-				if (l != 0.0f) {
-					dx /= l;
-					dy /= l;
-				}
-				b->hsp += dx * 2.0f;
-				b->vsp += dy * 2.0f;
-
-				e->t = 0.0f;
-			}
+			
 		}
 
 		for (int i = 0; i < bullet_count; i++) {
@@ -369,10 +407,16 @@ void Game::Frame() {
 		SDL_RenderClear(renderer);
 
 		// draw bg
-		{
-			float bg_w = 540.0f;
-			float bg_h = 360.0f;
-			float parallax = 1.0f;
+		auto draw_bg = [camera_x = this->camera_x, camera_y = this->camera_y, renderer = this->renderer](SDL_Texture* texture, float parallax) {
+			float bg_w;
+			float bg_h;
+			{
+				int w;
+				int h;
+				SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
+				bg_w = (float)w;
+				bg_h = (float)h;
+			}
 			float cam_x_para = camera_x / parallax;
 			float cam_y_para = camera_y / parallax;
 			
@@ -386,36 +430,93 @@ void Game::Frame() {
 						bg_w,
 						bg_h
 					};
-					SDL_RenderCopyF(renderer, tex_bg, nullptr, &dest);
+					SDL_RenderCopyF(renderer, texture, nullptr, &dest);
 
 					x += bg_w;
 				}
 
 				y += bg_h;
 			}
-		}
+		};
+
+		draw_bg(tex_bg, 5.0f);
+		draw_bg(tex_bg1, 4.0f);
 
 		// draw player
 		{
-			SDL_Texture* texture = tex_player_ship;
-			SDL_FRect dest = {player.x - 48.0f / 2.0f - camera_x, player.y - 48.0f / 2.0f - camera_y, 48.0f, 48.0f};
-			SDL_RenderCopyExF(renderer, texture, nullptr, &dest, (double)(-player.dir), nullptr, SDL_FLIP_NONE);
+			DrawTextureCentered(tex_player_ship, player.x, player.y, player.dir);
 		}
 
 		// draw enemies
 		for (int i = 0; i < enemy_count; i++) {
 			Enemy* e = &enemies[i];
-			DrawCircle(e->x - camera_x, e->y - camera_y, 20.0f);
+			DrawCircleCam(e->x, e->y, e->radius, {255, 0, 0, 255});
+			DrawTextureCentered(tex_asteroid3, e->x, e->y);
 		}
 
 		for (int i = 0; i < bullet_count; i++) {
 			Bullet* b = &bullets[i];
-			DrawCircle(b->x - camera_x, b->y - camera_y, 5.0f);
+			DrawCircleCam(b->x, b->y, 5.0f);
 		}
 
 		for (int i = 0; i < p_bullet_count; i++) {
 			Bullet* pb = &p_bullets[i];
-			DrawCircle(pb->x - camera_x, pb->y - camera_y, 5.0f);
+			DrawCircleCam(pb->x, pb->y, 5.0f);
+		}
+
+		// draw interface
+		{
+			static float t = 0.0f;
+			static SDL_Texture* tex = nullptr;
+			static SDL_Texture* map = nullptr;
+			int map_w = 100;
+			int map_h = 100;
+			t -= delta;
+			if (t <= 0.0f) {
+				char buf[40];
+				SDL_snprintf(buf, sizeof(buf),
+							 "X: %f\n"
+							 "Y: %f",
+							 player.x,
+							 player.y);
+				SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(fnt_mincho, buf, {255, 255, 255, 255}, 0);
+				tex = SDL_CreateTextureFromSurface(renderer, surf);
+				SDL_FreeSurface(surf);
+
+				if (!map) map = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, map_w, map_h);
+				SDL_SetRenderTarget(renderer, map);
+				{
+					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+					SDL_RenderClear(renderer);
+					SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+					SDL_RenderDrawPoint(renderer,
+										(int)(player.x / MAP_W * (float)map_w),
+										(int)(player.y / MAP_H * (float)map_h));
+				}
+				SDL_SetRenderTarget(renderer, nullptr);
+
+				t = 5.0f;
+			}
+			int y;
+			{
+				SDL_Rect dest = {};
+				SDL_QueryTexture(tex, nullptr, nullptr, &dest.w, &dest.h);
+				SDL_RenderCopy(renderer, tex, nullptr, &dest);
+				y = dest.h;
+			}
+			{
+				SDL_Rect dest = {0, y, map_w, map_h};
+				SDL_RenderCopy(renderer, map, nullptr, &dest);
+			}
+		}
+
+		// draw fps
+		{
+			SDL_Rect dest;
+			SDL_QueryTexture(fps_texture, nullptr, nullptr, &dest.w, &dest.h);
+			dest.x = GAME_W - dest.w;
+			dest.y = GAME_H - dest.h;
+			SDL_RenderCopy(renderer, fps_texture, nullptr, &dest);
 		}
 
 		SDL_RenderPresent(renderer);
