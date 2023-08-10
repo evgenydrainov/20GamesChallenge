@@ -70,6 +70,7 @@ struct Game {
 	SDL_Texture* tex_asteroid1;
 	SDL_Texture* tex_asteroid2;
 	SDL_Texture* tex_asteroid3;
+	SDL_Texture* tex_moon;
 
 	TTF_Font* fnt_mincho;
 
@@ -131,6 +132,7 @@ void Game::Init() {
 	tex_asteroid1   = IMG_LoadTexture(renderer, "assets/asteroid1.png");
 	tex_asteroid2   = IMG_LoadTexture(renderer, "assets/asteroid2.png");
 	tex_asteroid3   = IMG_LoadTexture(renderer, "assets/asteroid3.png");
+	tex_moon        = IMG_LoadTexture(renderer, "assets/moon.png");
 
 	fnt_mincho = TTF_OpenFont("assets/mincho.ttf", 22);
 
@@ -152,6 +154,14 @@ void Game::Init() {
 		e->type = 3;
 	}
 
+	{
+		Enemy* e = CreateEnemy();
+		e->x = 20.0f;
+		e->y = 20.0f;
+		e->radius = 50.0f;
+		e->type = 3;
+	}
+
 	// prev_time = GetTime() - (1.0 / (double)GAME_FPS);
 }
 
@@ -164,6 +174,7 @@ void Game::Quit() {
 
 	TTF_CloseFont(fnt_mincho);
 
+	SDL_DestroyTexture(tex_moon);
 	SDL_DestroyTexture(tex_asteroid3);
 	SDL_DestroyTexture(tex_asteroid2);
 	SDL_DestroyTexture(tex_asteroid1);
@@ -181,45 +192,85 @@ void Game::Quit() {
 }
 
 static void DrawCircleCam(float x, float y, float radius, SDL_Color color = {255, 255, 255, 255}) {
-	constexpr int precision = 12;
+	auto draw = [radius, color](float x, float y) {
+		SDL_Rect contains = {(int)(x - radius - game->camera_x), (int)(y - radius - game->camera_y), (int)(radius * 2.0f), (int)(radius * 2.0f)};
+		SDL_Rect screen = {0, 0, GAME_W, GAME_H};
 
-	for (int i = 0; i < precision; i++) {
-		float dir = (float)i / (float)precision * 360.0f;
-		float dir1 = (float)(i + 1) / (float)precision * 360.0f;
+		if (!SDL_HasIntersection(&contains, &screen)) {
+			return;
+		}
+		
+		constexpr int precision = 12;
 
-		SDL_Vertex vertices[3] = {};
-		vertices[0].position = {x, y};
-		vertices[1].position = {x + lengthdir_x(radius, dir), y + lengthdir_y(radius, dir)};
-		vertices[2].position = {x + lengthdir_x(radius, dir1), y + lengthdir_y(radius, dir1)};
-		vertices[0].color = color;
-		vertices[1].color = color;
-		vertices[2].color = color;
+		for (int i = 0; i < precision; i++) {
+			float dir = (float)i / (float)precision * 360.0f;
+			float dir1 = (float)(i + 1) / (float)precision * 360.0f;
 
-		vertices[0].position.x -= game->camera_x;
-		vertices[1].position.x -= game->camera_x;
-		vertices[2].position.x -= game->camera_x;
+			SDL_Vertex vertices[3] = {};
+			vertices[0].position = {x, y};
+			vertices[1].position = {x + lengthdir_x(radius, dir), y + lengthdir_y(radius, dir)};
+			vertices[2].position = {x + lengthdir_x(radius, dir1), y + lengthdir_y(radius, dir1)};
+			vertices[0].color = color;
+			vertices[1].color = color;
+			vertices[2].color = color;
 
-		vertices[0].position.y -= game->camera_y;
-		vertices[1].position.y -= game->camera_y;
-		vertices[2].position.y -= game->camera_y;
+			vertices[0].position.x -= game->camera_x;
+			vertices[1].position.x -= game->camera_x;
+			vertices[2].position.x -= game->camera_x;
 
-		SDL_RenderGeometry(game->renderer, nullptr, vertices, ArrayLength(vertices), nullptr, 0);
-	}
+			vertices[0].position.y -= game->camera_y;
+			vertices[1].position.y -= game->camera_y;
+			vertices[2].position.y -= game->camera_y;
+
+			SDL_RenderGeometry(game->renderer, nullptr, vertices, ArrayLength(vertices), nullptr, 0);
+		}
+	};
+
+	draw(x - MAP_W, y - MAP_H);
+	draw(x,         y - MAP_H);
+	draw(x + MAP_W, y - MAP_H);
+
+	draw(x - MAP_W, y);
+	draw(x,         y);
+	draw(x + MAP_W, y);
+
+	draw(x - MAP_W, y + MAP_H);
+	draw(x,         y + MAP_H);
+	draw(x + MAP_W, y + MAP_H);
 }
 
 template <typename Obj>
-static Obj* find_closest(Obj* objects, int object_count, float x, float y) {
+static Obj* find_closest(Obj* objects, int object_count, float x, float y, float* rel_x, float* rel_y) {
 	Obj* result = nullptr;
 	float dist_sq = INFINITY;
+
 	for (int i = 0; i < object_count; i++) {
-		float dx = x - objects[i].x;
-		float dy = y - objects[i].y;
-		float d = dx * dx + dy * dy;
-		if (d < dist_sq) {
-			result = &objects[i];
-			dist_sq = d;
-		}
+		auto check = [i, objects, x, y, &result, &dist_sq, rel_x, rel_y](float xoff, float yoff) {
+			float dx = x - (objects[i].x + xoff);
+			float dy = y - (objects[i].y + yoff);
+
+			float d = dx * dx + dy * dy;
+			if (d < dist_sq) {
+				result = &objects[i];
+				*rel_x = objects[i].x + xoff;
+				*rel_y = objects[i].y + yoff;
+				dist_sq = d;
+			}
+		};
+
+		check(-MAP_W, -MAP_H);
+		check( 0.0f,  -MAP_H);
+		check( MAP_W, -MAP_H);
+
+		check(-MAP_W,  0.0f);
+		check( 0.0f,   0.0f);
+		check( MAP_W,  0.0f);
+
+		check(-MAP_W,  MAP_H);
+		check( 0.0f,   MAP_H);
+		check( MAP_W,  MAP_H);
 	}
+
 	return result;
 }
 
@@ -228,14 +279,34 @@ static void DrawTextureCentered(SDL_Texture* texture, float x, float y, float an
 	int h;
 	SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
 
-	SDL_FRect dest = {
-		x - (float)w / 2.0f - game->camera_x,
-		y - (float)h / 2.0f - game->camera_y,
-		(float)w,
-		(float)h
+	auto draw = [x, y, w, h, texture, angle](float xoff, float yoff) {
+		SDL_FRect dest = {
+			x - (float)w / 2.0f - game->camera_x + xoff,
+			y - (float)h / 2.0f - game->camera_y + yoff,
+			(float)w,
+			(float)h
+		};
+
+		SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
+		SDL_Rect screen = {0, 0, GAME_W, GAME_H};
+		if (!SDL_HasIntersection(&idest, &screen)) {
+			return;
+		}
+
+		SDL_RenderCopyExF(game->renderer, texture, nullptr, &dest, (double)(-angle), nullptr, SDL_FLIP_NONE);
 	};
-	
-	SDL_RenderCopyExF(game->renderer, texture, nullptr, &dest, (double)(-angle), nullptr, SDL_FLIP_NONE);
+
+	draw(-MAP_W, -MAP_H);
+	draw( 0.0f,  -MAP_H);
+	draw( MAP_W, -MAP_H);
+
+	draw(-MAP_W,  0.0f);
+	draw( 0.0f,   0.0f);
+	draw( MAP_W,  0.0f);
+
+	draw(-MAP_W,  MAP_H);
+	draw( 0.0f,   MAP_H);
+	draw( MAP_W,  MAP_H);
 }
 
 void Game::Run() {
@@ -324,9 +395,11 @@ void Game::Frame() {
 
 			decelerate(PLAYER_ACC * 2.0f);
 
-			if (Enemy* e = find_closest(enemies, enemy_count, p->x, p->y)) {
+			float rel_x;
+			float rel_y;
+			if (Enemy* e = find_closest(enemies, enemy_count, p->x, p->y, &rel_x, &rel_y)) {
 				constexpr float f = 1.0f - 0.05f;
-				float dir = point_direction(p->x, p->y, e->x, e->y);
+				float dir = point_direction(p->x, p->y, rel_x, rel_y);
 				float target = p->dir - angle_difference(p->dir, dir);
 				p->dir = lerp(p->dir, target, 1.0f - SDL_powf(f, delta));
 			}
@@ -360,10 +433,10 @@ void Game::Frame() {
 		p->x += p->hsp * delta;
 		p->y += p->vsp * delta;
 
-		if (p->x < 0.0f) {p->x += 10'000.0f; camera_x += 10'000.0f;}
-		if (p->y < 0.0f) {p->y += 10'000.0f; camera_y += 10'000.0f;}
-		if (p->x >= 10'000.0f) {p->x -= 10'000.0f; camera_x -= 10'000.0f;}
-		if (p->y >= 10'000.0f) {p->y -= 10'000.0f; camera_y -= 10'000.0f;}
+		if (p->x < 0.0f) {p->x += MAP_W; camera_x += MAP_W;}
+		if (p->y < 0.0f) {p->y += MAP_H; camera_y += MAP_H;}
+		if (p->x >= MAP_W) {p->x -= MAP_W; camera_x -= MAP_W;}
+		if (p->y >= MAP_H) {p->y -= MAP_H; camera_y -= MAP_H;}
 
 		if (input_press & INPUT_FIRE) {
 			Bullet* pb = CreatePlrBullet();
@@ -386,18 +459,32 @@ void Game::Frame() {
 		for (int i = 0; i < enemy_count; i++) {
 			Enemy* e = &enemies[i];
 			
+			if (e->x < 0.0f) e->x += MAP_W;
+			if (e->y < 0.0f) e->y += MAP_H;
+			if (e->x >= MAP_W) e->x -= MAP_W;
+			if (e->y >= MAP_H) e->y -= MAP_H;
 		}
 
 		for (int i = 0; i < bullet_count; i++) {
 			Bullet* b = &bullets[i];
 			b->x += b->hsp * delta;
 			b->y += b->vsp * delta;
+
+			if (p->x < 0.0f) p->x += MAP_W;
+			if (p->y < 0.0f) p->y += MAP_H;
+			if (p->x >= MAP_W) p->x -= MAP_W;
+			if (p->y >= MAP_H) p->y -= MAP_H;
 		}
 
 		for (int i = 0; i < p_bullet_count; i++) {
 			Bullet* pb = &p_bullets[i];
 			pb->x += pb->hsp * delta;
 			pb->y += pb->vsp * delta;
+
+			if (pb->x < 0.0f) pb->x += MAP_W;
+			if (pb->y < 0.0f) pb->y += MAP_H;
+			if (pb->x >= MAP_W) pb->x -= MAP_W;
+			if (pb->y >= MAP_H) pb->y -= MAP_H;
 		}
 	}
 
@@ -441,6 +528,40 @@ void Game::Frame() {
 
 		draw_bg(tex_bg, 5.0f);
 		draw_bg(tex_bg1, 4.0f);
+
+		{
+			auto draw = [](float xoff, float yoff) {
+				int w;
+				int h;
+				SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
+				SDL_FRect dest = {
+					500.0f - (game->camera_x + xoff) / 5.0f,
+					500.0f - (game->camera_y + yoff) / 5.0f,
+					(float)w,
+					(float)h
+				};
+
+				SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
+				SDL_Rect screen = {0, 0, GAME_W, GAME_H};
+				if (!SDL_HasIntersection(&idest, &screen)) {
+					return;
+				}
+
+				SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
+			};
+
+			draw(-MAP_W, -MAP_H);
+			draw( 0.0f,  -MAP_H);
+			draw( MAP_W, -MAP_H);
+
+			draw(-MAP_W,  0.0f);
+			draw( 0.0f,   0.0f);
+			draw( MAP_W,  0.0f);
+
+			draw(-MAP_W,  MAP_H);
+			draw( 0.0f,   MAP_H);
+			draw( MAP_W,  MAP_H);
+		}
 
 		// draw player
 		{
