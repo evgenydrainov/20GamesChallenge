@@ -54,3 +54,10 @@ static float point_direction_rad(float x1, float y1, float x2, float y2) {
 static float point_direction(float x1, float y1, float x2, float y2) {
 	return to_degrees(point_direction_rad(x1, y1, x2, y2));
 }
+
+static bool circle_vs_circle(float x1, float y1, float r1, float x2, float y2, float r2) {
+	float dx = x2 - x1;
+	float dy = y2 - y1;
+	float r = r1 + r2;
+	return (dx * dx + dy * dy) < (r * r);
+}
