@@ -81,6 +81,10 @@ struct Game {
 	double fps_sum;
 	double fps_timer;
 	SDL_Texture* fps_texture;
+	float interface_update_t;
+	SDL_Texture* interface_texture;
+	SDL_Texture* interface_map_texture;
+	bool hide_interface;
 
 	void Init();
 	void Quit();
@@ -166,6 +170,8 @@ void Game::Init() {
 }
 
 void Game::Quit() {
+	SDL_DestroyTexture(interface_map_texture);
+	SDL_DestroyTexture(interface_texture);
 	SDL_DestroyTexture(fps_texture);
 
 	free(p_bullets);
@@ -320,7 +326,7 @@ void Game::Frame() {
 
 	double frame_end_time = time + (1.0 / (double)GAME_FPS);
 
-	fps_sum += 1.0 / (time - prev_time);
+	double _fps = 1.0 / (time - prev_time);
 	prev_time = time;
 
 	SDL_Event event;
@@ -330,26 +336,36 @@ void Game::Frame() {
 				quit = true;
 				break;
 			}
+
+			case SDL_KEYDOWN: {
+				if (event.key.keysym.scancode == SDL_SCANCODE_TAB) {
+					hide_interface ^= true;
+				}
+				break;
+			}
 		}
 	}
 
 	float delta = 1.0f;
 
-	fps_timer += delta;
-	if (fps_timer >= 60.0f || !fps_texture) {
-		double fps = fps_sum / fps_timer;
+	if (!hide_interface || !fps_texture) {
+		fps_sum += _fps;
+		fps_timer += delta;
+		if (fps_timer >= 60.0f || !fps_texture) {
+			double fps = fps_sum / fps_timer;
 
-		if (fps_texture) SDL_DestroyTexture(fps_texture);
+			if (fps_texture) SDL_DestroyTexture(fps_texture);
 
-		char buf[10];
-		SDL_snprintf(buf, sizeof(buf), "%f", fps);
-		SDL_Surface* surf = TTF_RenderText_Blended(fnt_mincho, buf, {255, 255, 255, 255});
-		
-		fps_texture = SDL_CreateTextureFromSurface(renderer, surf);
-		SDL_FreeSurface(surf);
-		
-		fps_timer = 0.0f;
-		fps_sum = 0.0f;
+			char buf[10];
+			SDL_snprintf(buf, sizeof(buf), "%f", fps);
+			SDL_Surface* surf = TTF_RenderText_Blended(fnt_mincho, buf, {255, 255, 255, 255});
+			
+			fps_texture = SDL_CreateTextureFromSurface(renderer, surf);
+			SDL_FreeSurface(surf);
+			
+			fps_timer = 0.0f;
+			fps_sum = 0.0f;
+		}
 	}
 
 	// input
@@ -586,14 +602,11 @@ void Game::Frame() {
 		}
 
 		// draw interface
-		{
-			static float t = 0.0f;
-			static SDL_Texture* tex = nullptr;
-			static SDL_Texture* map = nullptr;
+		if (!hide_interface || !interface_texture || !interface_map_texture) {
 			int map_w = 100;
 			int map_h = 100;
-			t -= delta;
-			if (t <= 0.0f) {
+			interface_update_t -= delta;
+			if (interface_update_t <= 0.0f) {
 				char buf[40];
 				SDL_snprintf(buf, sizeof(buf),
 							 "X: %f\n"
@@ -601,11 +614,11 @@ void Game::Frame() {
 							 player.x,
 							 player.y);
 				SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(fnt_mincho, buf, {255, 255, 255, 255}, 0);
-				tex = SDL_CreateTextureFromSurface(renderer, surf);
+				interface_texture = SDL_CreateTextureFromSurface(renderer, surf);
 				SDL_FreeSurface(surf);
 
-				if (!map) map = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, map_w, map_h);
-				SDL_SetRenderTarget(renderer, map);
+				if (!interface_map_texture) interface_map_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, map_w, map_h);
+				SDL_SetRenderTarget(renderer, interface_map_texture);
 				{
 					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 					SDL_RenderClear(renderer);
@@ -616,28 +629,29 @@ void Game::Frame() {
 				}
 				SDL_SetRenderTarget(renderer, nullptr);
 
-				t = 5.0f;
+				interface_update_t = 5.0f;
 			}
+			
 			int y;
 			{
 				SDL_Rect dest = {};
-				SDL_QueryTexture(tex, nullptr, nullptr, &dest.w, &dest.h);
-				SDL_RenderCopy(renderer, tex, nullptr, &dest);
+				SDL_QueryTexture(interface_texture, nullptr, nullptr, &dest.w, &dest.h);
+				SDL_RenderCopy(renderer, interface_texture, nullptr, &dest);
 				y = dest.h;
 			}
 			{
 				SDL_Rect dest = {0, y, map_w, map_h};
-				SDL_RenderCopy(renderer, map, nullptr, &dest);
+				SDL_RenderCopy(renderer, interface_map_texture, nullptr, &dest);
 			}
-		}
 
-		// draw fps
-		{
-			SDL_Rect dest;
-			SDL_QueryTexture(fps_texture, nullptr, nullptr, &dest.w, &dest.h);
-			dest.x = GAME_W - dest.w;
-			dest.y = GAME_H - dest.h;
-			SDL_RenderCopy(renderer, fps_texture, nullptr, &dest);
+			// draw fps
+			{
+				SDL_Rect dest;
+				SDL_QueryTexture(fps_texture, nullptr, nullptr, &dest.w, &dest.h);
+				dest.x = GAME_W - dest.w;
+				dest.y = GAME_H - dest.h;
+				SDL_RenderCopy(renderer, fps_texture, nullptr, &dest);
+			}
 		}
 
 		SDL_RenderPresent(renderer);
