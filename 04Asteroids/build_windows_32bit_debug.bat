@@ -20,4 +20,8 @@ cl^
  /link^
  /SUBSYSTEM:CONSOLE
 
+REM out\main.exe
+
+REM devenv out\main.exe
+
 popd

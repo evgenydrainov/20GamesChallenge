@@ -48,7 +48,7 @@ static void normalize0(float x, float y, float* out_x, float* out_y) {
 }
 
 static float point_direction_rad(float x1, float y1, float x2, float y2) {
-    return SDL_atan2f(y1 - y2, x2 - x1);
+	return SDL_atan2f(y1 - y2, x2 - x1);
 }
 
 static float point_direction(float x1, float y1, float x2, float y2) {

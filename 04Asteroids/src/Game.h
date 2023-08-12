@@ -32,104 +32,104 @@
 #define ASTEROID_RADIUS_1 12.0f
 
 enum {
-    INPUT_RIGHT = 1,
-    INPUT_UP    = 1 << 1,
-    INPUT_LEFT  = 1 << 2,
-    INPUT_DOWN  = 1 << 3,
-    INPUT_FIRE  = 1 << 4,
-    INPUT_FOCUS = 1 << 5
+	INPUT_RIGHT = 1,
+	INPUT_UP    = 1 << 1,
+	INPUT_LEFT  = 1 << 2,
+	INPUT_DOWN  = 1 << 3,
+	INPUT_FIRE  = 1 << 4,
+	INPUT_FOCUS = 1 << 5
 };
 
 struct Player {
-    float x;
-    float y;
-    float hsp;
-    float vsp;
-    float dir;
-    bool focus;
-    float power;
+	float x;
+	float y;
+	float hsp;
+	float vsp;
+	float dir;
+	bool focus;
+	float power;
 };
 
 struct Enemy {
-    float x;
-    float y;
-    float hsp;
-    float vsp;
-    float radius = 10.0f;
-    int type;
-    float hp = 1.0f;
-    SDL_Texture* texture;
-    float power = 1.0f;
-    float angle;
-    mco_coro* co;
+	float x;
+	float y;
+	float hsp;
+	float vsp;
+	float radius = 10.0f;
+	int type;
+	float hp = 1.0f;
+	SDL_Texture* texture;
+	float power = 1.0f;
+	float angle;
+	mco_coro* co;
 
-    union {
-        struct { // used by type 10
-            float catch_up_timer;
-        };
-    };
+	union {
+		struct { // used by type 10
+			float catch_up_timer;
+		};
+	};
 };
 
 struct Bullet {
-    float x;
-    float y;
-    float hsp;
-    float vsp;
-    float radius = 5.0f;
-    float dmg = 1.0f;
-    float lifespan = 2.0f * 60.0f;
-    float lifetime;
+	float x;
+	float y;
+	float hsp;
+	float vsp;
+	float radius = 5.0f;
+	float dmg = 1.0f;
+	float lifespan = 2.0f * 60.0f;
+	float lifetime;
 };
 
 struct Game {
-    Player player;
-    float camera_x;
-    float camera_y;
-    Enemy* enemies;
-    int enemy_count;
-    Bullet* bullets;
-    int bullet_count;
-    Bullet* p_bullets; // player bullets
-    int p_bullet_count;
-    unsigned int input;
-    unsigned int input_press;
-    unsigned int input_release;
-    mco_coro* co;
+	Player player;
+	float camera_x;
+	float camera_y;
+	Enemy* enemies;
+	int enemy_count;
+	Bullet* bullets;
+	int bullet_count;
+	Bullet* p_bullets; // player bullets
+	int p_bullet_count;
+	unsigned int input;
+	unsigned int input_press;
+	unsigned int input_release;
+	mco_coro* co;
 
-    SDL_Texture* tex_player_ship;
-    SDL_Texture* tex_bg;
-    SDL_Texture* tex_bg1;
-    SDL_Texture* tex_asteroid1;
-    SDL_Texture* tex_asteroid2;
-    SDL_Texture* tex_asteroid3;
-    SDL_Texture* tex_moon;
+	SDL_Texture* tex_player_ship;
+	SDL_Texture* tex_bg;
+	SDL_Texture* tex_bg1;
+	SDL_Texture* tex_asteroid1;
+	SDL_Texture* tex_asteroid2;
+	SDL_Texture* tex_asteroid3;
+	SDL_Texture* tex_moon;
 
-    TTF_Font* fnt_mincho;
+	TTF_Font* fnt_mincho;
 
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    double prev_time;
-    bool quit;
-    double fps_sum;
-    double fps_timer;
-    SDL_Texture* fps_texture;
-    float interface_update_t;
-    SDL_Texture* interface_texture;
-    SDL_Texture* interface_map_texture;
-    bool hide_interface;
+	SDL_Window* window;
+	SDL_Renderer* renderer;
+	double prev_time;
+	bool quit;
+	double fps_sum;
+	double fps_timer;
+	SDL_Texture* fps_texture;
+	float interface_update_t;
+	SDL_Texture* interface_texture;
+	SDL_Texture* interface_map_texture;
+	bool hide_interface;
 
-    void Init();
-    void Quit();
-    void Run();
-    void Frame();
+	void Init();
+	void Quit();
+	void Run();
+	void Frame();
 
-    Enemy* CreateEnemy();
-    Bullet* CreateBullet();
-    Bullet* CreatePlrBullet();
+	Enemy* CreateEnemy();
+	Bullet* CreateBullet();
+	Bullet* CreatePlrBullet();
 
-    void DestroyEnemy(int enemy_idx);
-    void DestroyBullet(int bullet_idx);
-    void DestroyPlrBullet(int p_bullet_idx);
+	void DestroyEnemy(int enemy_idx);
+	void DestroyBullet(int bullet_idx);
+	void DestroyPlrBullet(int p_bullet_idx);
 };
 
 extern Game* game;

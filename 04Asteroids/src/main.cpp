@@ -9,9 +9,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
-#endif
 
-#ifdef __EMSCRIPTEN__
 static void emscripten_main_loop() {
 	game->Frame();
 }
