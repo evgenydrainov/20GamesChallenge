@@ -17,7 +17,7 @@ static void emscripten_main_loop() {
 }
 #endif
 
-int main() {
+int SDL_main(int argc, char* argv[]) {
 	Game game_instance = {};
 	game = &game_instance;
 
