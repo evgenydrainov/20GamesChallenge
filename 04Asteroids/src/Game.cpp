@@ -426,7 +426,7 @@ void Game::Frame() {
 	t = GetTime();
 	double time_left = frame_end_time - t;
 	if (time_left > 0.0) {
-		SDL_Delay((Uint32)(time_left * 0.95));
+		SDL_Delay((Uint32)(time_left * 0.95 * 1000.0));
 		while (GetTime() < frame_end_time) {}
 	}
 #endif
