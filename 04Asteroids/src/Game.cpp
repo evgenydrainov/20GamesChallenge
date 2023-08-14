@@ -1,5 +1,11 @@
 #include "Game.h"
 
+#ifdef _WIN32
+#include <SDL_ttf.h>
+#else
+#include <SDL2/SDL_ttf.h>
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -19,6 +25,7 @@ static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type, fl
 	e->hsp = hsp;
 	e->vsp = vsp;
 	e->power = power;
+	e->health = 1.0f;
 	if (type == 3) {
 		e->radius = ASTEROID_RADIUS_3;
 		e->type = 3;
@@ -122,7 +129,7 @@ static void spawn_enemies(mco_coro* co) {
 }
 
 void Game::Init() {
-	srand(time(nullptr));
+	srand(::time(nullptr));
 
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
@@ -132,6 +139,8 @@ void Game::Init() {
 	Mix_Init(MIX_INIT_OGG);
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+	// SDL_SetHint(SDL_HINT_RENDER_DRIVER,        "opengl");
+	// SDL_SetHint(SDL_HINT_RENDER_BATCHING,      "1");
 
 	window = SDL_CreateWindow("04Asteroids",
 							  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -152,7 +161,7 @@ void Game::Init() {
 	tex_asteroid3   = IMG_LoadTexture(renderer, "assets/asteroid3.png");
 	tex_moon        = IMG_LoadTexture(renderer, "assets/moon.png");
 
-	fnt_mincho = TTF_OpenFont("assets/mincho.ttf", 22);
+	LoadFont(&fnt_mincho, "assets/mincho.ttf", 22);
 
 	player.x = (float)MAP_W / 2.0f;
 	player.y = (float)MAP_H / 2.0f;
@@ -178,8 +187,6 @@ void Game::Init() {
 
 void Game::Quit() {
 	SDL_DestroyTexture(interface_map_texture);
-	SDL_DestroyTexture(interface_texture);
-	SDL_DestroyTexture(fps_texture);
 
 	mco_destroy(co);
 
@@ -187,7 +194,7 @@ void Game::Quit() {
 	free(bullets);
 	free(enemies);
 
-	TTF_CloseFont(fnt_mincho);
+	DestroyFont(&fnt_mincho);
 
 	SDL_DestroyTexture(tex_moon);
 	SDL_DestroyTexture(tex_asteroid3);
@@ -254,12 +261,17 @@ static void DrawCircleCam(float x, float y, float radius, SDL_Color color = {255
 	draw(x + MAP_W, y + MAP_H);
 }
 
-template <typename Obj>
-static Obj* find_closest(Obj* objects, int object_count, float x, float y, float* rel_x, float* rel_y, float* out_dist) {
+template <typename Obj, typename F>
+static Obj* find_closest(Obj* objects, int object_count,
+						 float x, float y,
+						 float* rel_x, float* rel_y, float* out_dist,
+						 const F& filter) {
 	Obj* result = nullptr;
 	float dist_sq = INFINITY;
 
 	for (int i = 0; i < object_count; i++) {
+		if (!filter(&objects[i])) continue;
+
 		auto check = [i, objects, x, y, &result, &dist_sq, rel_x, rel_y, out_dist](float xoff, float yoff) {
 			float dx = x - (objects[i].x + xoff);
 			float dy = y - (objects[i].y + yoff);
@@ -290,12 +302,23 @@ static Obj* find_closest(Obj* objects, int object_count, float x, float y, float
 	return result;
 }
 
-static void DrawTextureCentered(SDL_Texture* texture, float x, float y, float angle = 0.0f) {
+template <typename Obj>
+static Obj* find_closest(Obj* objects, int object_count,
+						 float x, float y,
+						 float* rel_x, float* rel_y, float* out_dist) {
+	return find_closest(objects, object_count,
+						x, y,
+						rel_x, rel_y, out_dist,
+						[](Obj*) { return true; });
+}
+
+static void DrawTextureCentered(SDL_Texture* texture, float x, float y,
+								float angle = 0.0f, SDL_Color col = {255, 255, 255, 255}) {
 	int w;
 	int h;
 	SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
 
-	auto draw = [x, y, w, h, texture, angle](float xoff, float yoff) {
+	auto draw = [x, y, w, h, texture, angle, col](float xoff, float yoff) {
 		SDL_FRect dest = {
 			x - (float)w / 2.0f - game->camera_x + xoff,
 			y - (float)h / 2.0f - game->camera_y + yoff,
@@ -309,6 +332,8 @@ static void DrawTextureCentered(SDL_Texture* texture, float x, float y, float an
 			return;
 		}
 
+		SDL_SetTextureColorMod(texture, col.r, col.g, col.b);
+		SDL_SetTextureAlphaMod(texture, col.a);
 		SDL_RenderCopyExF(game->renderer, texture, nullptr, &dest, (double)(-angle), nullptr, SDL_FLIP_NONE);
 	};
 
@@ -332,12 +357,12 @@ void Game::Run() {
 }
 
 void Game::Frame() {
-	double time = GetTime();
+	double t = GetTime();
 
-	double frame_end_time = time + (1.0 / (double)GAME_FPS);
+	double frame_end_time = t + (1.0 / (double)GAME_FPS);
 
-	double _fps = 1.0 / (time - prev_time);
-	prev_time = time;
+	double current_fps = 1.0 / (t - prev_time);
+	prev_time = t;
 
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
@@ -348,8 +373,15 @@ void Game::Frame() {
 			}
 
 			case SDL_KEYDOWN: {
-				if (event.key.keysym.scancode == SDL_SCANCODE_TAB) {
-					hide_interface ^= true;
+				switch (event.key.keysym.scancode) {
+					case SDL_SCANCODE_TAB: {
+						hide_interface ^= true;
+						break;
+					}
+					case SDL_SCANCODE_H: {
+						show_hitboxes ^= true;
+						break;
+					}
 				}
 				break;
 			}
@@ -358,24 +390,12 @@ void Game::Frame() {
 
 	float delta = 1.0f;
 
-	if (!hide_interface || !fps_texture) {
-		fps_sum += _fps;
-		fps_timer += delta;
-		if (fps_timer >= 60.0f || !fps_texture) {
-			double fps = fps_sum / fps_timer;
-
-			if (fps_texture) SDL_DestroyTexture(fps_texture);
-
-			char buf[10];
-			SDL_snprintf(buf, sizeof(buf), "%.2f", fps);
-			SDL_Surface* surf = TTF_RenderText_Blended(fnt_mincho, buf, {255, 255, 255, 255});
-			
-			fps_texture = SDL_CreateTextureFromSurface(renderer, surf);
-			SDL_FreeSurface(surf);
-			
-			fps_timer = 0.0f;
-			fps_sum = 0.0f;
-		}
+	fps_sum += current_fps;
+	fps_timer += delta;
+	if (fps_timer >= 60.0f) {
+		fps = fps_sum / fps_timer;
+		fps_timer = 0.0f;
+		fps_sum = 0.0f;
 	}
 
 	// input
@@ -396,490 +416,563 @@ void Game::Frame() {
 		input_release =  prev & ~input;
 	}
 
-	// :update
-	{
-		{
-			Player* p = &player;
+	update(delta);
 
-			p->focus = (input & INPUT_FOCUS) != 0;
+	draw(delta);
 
-			auto decelerate = [p, delta](float dec) {
-				float l = length(p->hsp, p->vsp);
-				if (l > PLAYER_ACC) {
-					p->hsp -= dec * p->hsp / l * delta;
-					p->vsp -= dec * p->vsp / l * delta;
-				} else {
-					p->hsp = 0.0f;
-					p->vsp = 0.0f;
-				}
-			};
-
-			if (p->focus) {
-				if (input & INPUT_RIGHT) p->x += PLAYER_FOCUS_SPD * delta;
-				if (input & INPUT_UP)    p->y -= PLAYER_FOCUS_SPD * delta;
-				if (input & INPUT_LEFT)  p->x -= PLAYER_FOCUS_SPD * delta;
-				if (input & INPUT_DOWN)  p->y += PLAYER_FOCUS_SPD * delta;
-
-				decelerate(PLAYER_ACC * 2.0f);
-
-				float rel_x;
-				float rel_y;
-				float dist;
-				if (Enemy* e = find_closest(enemies, enemy_count, p->x, p->y, &rel_x, &rel_y, &dist)) {
-					if (dist < 800.0f) {
-						constexpr float f = 1.0f - 0.05f;
-						float dir = point_direction(p->x, p->y, rel_x, rel_y);
-						float target = p->dir - angle_difference(p->dir, dir);
-						p->dir = lerp(p->dir, target, 1.0f - SDL_powf(f, delta));
-					}
-				}
-			} else {
-				{
-					float turn_spd = PLAYER_TURN_SPD;
-					if ((input & INPUT_UP) || (input & INPUT_DOWN)) {
-						turn_spd /= 2.0f;
-					}
-					if (input & INPUT_RIGHT) p->dir -= turn_spd * delta;
-					if (input & INPUT_LEFT)  p->dir += turn_spd * delta;
-				}
-				
-				if (input & INPUT_UP) {
-					// accelerate
-					float rad = p->dir / 180.0f * (float)M_PI;
-					p->hsp += PLAYER_ACC *  SDL_cosf(rad) * delta;
-					p->vsp += PLAYER_ACC * -SDL_sinf(rad) * delta;
-				} else {
-					decelerate(PLAYER_ACC / 4.0f);
-				}
-
-				if (input & INPUT_DOWN) {
-					p->x -= lengthdir_x(2.0f, p->dir);
-					p->y -= lengthdir_y(2.0f, p->dir);
-				}
-			}
-
-			// limit speed
-			float player_spd = length(p->hsp, p->vsp);
-			if (player_spd > PLAYER_MAX_SPD) {
-				p->hsp = p->hsp / player_spd * PLAYER_MAX_SPD;
-				p->vsp = p->vsp / player_spd * PLAYER_MAX_SPD;
-			}
-		}
-
-		for (int i = 0; i < enemy_count; i++) {
-			Enemy* e = &enemies[i];
-			if (e->type == 10) {
-				e->catch_up_timer -= delta;
-				if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
-
-				float rel_x;
-				float rel_y;
-				float dist;
-				if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
-					if (dist > 800.0f && e->catch_up_timer == 0.0f) {
-						e->catch_up_timer = 5.0f * 60.0f;
-					}
-
-					//float max_spd = (e->catch_up_timer > 0.0f) ? 14.0f : 8.0f;
-					float max_spd = 11.0f;
-
-					// float spd = length(e->hsp, e->vsp);
-					// float dir = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
-					
-					// float dir_target = dir - angle_difference(dir, point_direction(e->x, e->y, rel_x, rel_y));
-					// dir = approach(dir, dir_target, 1.5f * delta);
-					// spd += 0.2f;
-					// if (spd > max_spd) spd = max_spd;
-					
-					// e->hsp = lengthdir_x(spd, dir);
-					// e->vsp = lengthdir_y(spd, dir);
-					// e->angle = dir;
-
-					float dir = point_direction(e->x, e->y, rel_x, rel_y);
-					e->hsp += lengthdir_x(0.3f, dir) * delta;
-					e->vsp += lengthdir_y(0.3f, dir) * delta;
-					e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
-					if (length(e->hsp, e->vsp) > max_spd) {
-						e->hsp = lengthdir_x(max_spd, e->angle);
-						e->vsp = lengthdir_y(max_spd, e->angle);
-					}
-				}
-			}
-		}
-
-		// :physics
-
-		{
-			Player* p = &player;
-			p->x += p->hsp * delta;
-			p->y += p->vsp * delta;
-
-			if (p->x < 0.0f) {p->x += MAP_W; camera_x += MAP_W;}
-			if (p->y < 0.0f) {p->y += MAP_H; camera_y += MAP_H;}
-			if (p->x >= MAP_W) {p->x -= MAP_W; camera_x -= MAP_W;}
-			if (p->y >= MAP_H) {p->y -= MAP_H; camera_y -= MAP_H;}
-		}
-
-		for (int i = 0; i < enemy_count; i++) {
-			Enemy* e = &enemies[i];
-			
-			e->x += e->hsp * delta;
-			e->y += e->vsp * delta;
-
-			if (e->x < 0.0f) e->x += MAP_W;
-			if (e->y < 0.0f) e->y += MAP_H;
-			if (e->x >= MAP_W) e->x -= MAP_W;
-			if (e->y >= MAP_H) e->y -= MAP_H;
-		}
-
-		for (int i = 0; i < bullet_count; i++) {
-			Bullet* b = &bullets[i];
-
-			b->x += b->hsp * delta;
-			b->y += b->vsp * delta;
-
-			if (b->x < 0.0f) b->x += MAP_W;
-			if (b->y < 0.0f) b->y += MAP_H;
-			if (b->x >= MAP_W) b->x -= MAP_W;
-			if (b->y >= MAP_H) b->y -= MAP_H;
-		}
-
-		for (int i = 0; i < p_bullet_count; i++) {
-			Bullet* pb = &p_bullets[i];
-
-			pb->x += pb->hsp * delta;
-			pb->y += pb->vsp * delta;
-
-			if (pb->x < 0.0f) pb->x += MAP_W;
-			if (pb->y < 0.0f) pb->y += MAP_H;
-			if (pb->x >= MAP_W) pb->x -= MAP_W;
-			if (pb->y >= MAP_H) pb->y -= MAP_H;
-		}
-
-		// :collision
-
-		for (int enemy_idx = 0, c = enemy_count; enemy_idx < c;) {
-			Enemy* e = &enemies[enemy_idx];
-
-			for (int pb_idx = 0; pb_idx < p_bullet_count;) {
-				Bullet* pb = &p_bullets[pb_idx];
-
-				if (circle_vs_circle(e->x, e->y, e->radius, pb->x, pb->y, pb->radius)) {
-					e->hp -= pb->dmg;
-					
-					float dir = point_direction(pb->x, pb->y, e->x, e->y);
-					dir += (float)(-5 + rand() % 10);
-
-					DestroyPlrBullet(pb_idx);
-					
-					if (e->hp <= 0.0f) {
-						player.power += e->power;
-
-						if (e->type == 3) {
-							make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, dir + 90.0f), e->vsp + lengthdir_y(1.0f, dir + 90.0f), 2, e->power / 2.0f);
-							make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, dir - 90.0f), e->vsp + lengthdir_y(1.0f, dir - 90.0f), 2, e->power / 2.0f);
-						} else if (e->type == 2) {
-							make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, dir + 90.0f), e->vsp + lengthdir_y(1.0f, dir + 90.0f), 1, e->power / 2.0f);
-							make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, dir - 90.0f), e->vsp + lengthdir_y(1.0f, dir - 90.0f), 1, e->power / 2.0f);
-						}
-
-						DestroyEnemy(enemy_idx);
-						c--;
-						goto enemy_continue;
-					}
-					
-					continue;
-				}
-
-				pb_idx++;
-			}
-			
-			enemy_idx++;
-
-			enemy_continue:;
-		}
-
-		// :late update
-
-		{
-			Player* p = &player;
-			if (input_press & INPUT_FIRE) {
-				if (p->power >= 50.0f) {
-					{
-						Bullet* pb = CreatePlrBullet();
-						pb->x = p->x;
-						pb->y = p->y;
-
-						pb->hsp = p->hsp;
-						pb->vsp = p->vsp;
-
-						pb->hsp += lengthdir_x(15.0f, p->dir - 4.0f);
-						pb->vsp += lengthdir_y(15.0f, p->dir - 4.0f);
-					}
-					{
-						Bullet* pb = CreatePlrBullet();
-						pb->x = p->x;
-						pb->y = p->y;
-
-						pb->hsp = p->hsp;
-						pb->vsp = p->vsp;
-
-						pb->hsp += lengthdir_x(15.0f, p->dir + 4.0f);
-						pb->vsp += lengthdir_y(15.0f, p->dir + 4.0f);
-					}
-				} else {
-					Bullet* pb = CreatePlrBullet();
-					pb->x = p->x;
-					pb->y = p->y;
-
-					pb->hsp = p->hsp;
-					pb->vsp = p->vsp;
-
-					pb->hsp += lengthdir_x(15.0f, p->dir);
-					pb->vsp += lengthdir_y(15.0f, p->dir);
-				}
-			}
-
-			{
-				constexpr float f = 1.0f - 0.4f;
-				camera_x = lerp(camera_x, p->x - (float)GAME_W / 2.0f, 1.0f - SDL_powf(f, delta));
-				camera_y = lerp(camera_y, p->y - (float)GAME_H / 2.0f, 1.0f - SDL_powf(f, delta));
-			}
-		}
-
-		for (int i = 0; i < bullet_count; i++) {
-			Bullet* b = &bullets[i];
-			b->lifetime += delta;
-			if (b->lifetime >= b->lifespan) {
-				DestroyBullet(i);
-				i--;
-			}
-		}
-
-		for (int i = 0; i < p_bullet_count; i++) {
-			Bullet* pb = &p_bullets[i];
-			pb->lifetime += delta;
-			if (pb->lifetime >= pb->lifespan) {
-				DestroyPlrBullet(i);
-				i--;
-			}
-		}
-
-		if (mco_status(co) != MCO_DEAD) {
-			mco_resume(co);
-		}
-
-		for (int i = 0; i < enemy_count; i++) {
-			Enemy* e = &enemies[i];
-			if (e->co) {
-				if (mco_status(e->co) != MCO_DEAD) {
-					e->co->user_data = e;
-					mco_resume(e->co);
-				}
-			}
-		}
-	}
-
-	// :draw
-	{
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-
-		// draw bg
-		auto draw_bg = [camera_x = this->camera_x, camera_y = this->camera_y, renderer = this->renderer](SDL_Texture* texture, float parallax) {
-			float bg_w;
-			float bg_h;
-			{
-				int w;
-				int h;
-				SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
-				bg_w = (float)w;
-				bg_h = (float)h;
-			}
-			float cam_x_para = camera_x / parallax;
-			float cam_y_para = camera_y / parallax;
-			
-			float y = SDL_floorf(cam_y_para / bg_h) * bg_h;
-			while (y < cam_y_para + (float)GAME_H) {
-				float x = SDL_floorf(cam_x_para / bg_w) * bg_w;
-				while (x < cam_x_para + (float)GAME_W) {
-					SDL_FRect dest = {
-						x - cam_x_para,
-						y - cam_y_para,
-						bg_w,
-						bg_h
-					};
-					SDL_RenderCopyF(renderer, texture, nullptr, &dest);
-
-					x += bg_w;
-				}
-
-				y += bg_h;
-			}
-		};
-
-		draw_bg(tex_bg, 5.0f);
-		draw_bg(tex_bg1, 4.0f);
-
-		{
-			auto draw = [](float xoff, float yoff) {
-				int w;
-				int h;
-				SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
-				SDL_FRect dest = {
-					500.0f - (game->camera_x + xoff) / 5.0f,
-					500.0f - (game->camera_y + yoff) / 5.0f,
-					(float)w,
-					(float)h
-				};
-
-				SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
-				SDL_Rect screen = {0, 0, GAME_W, GAME_H};
-				if (!SDL_HasIntersection(&idest, &screen)) {
-					return;
-				}
-
-				SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
-			};
-
-			draw(-MAP_W, -MAP_H);
-			draw( 0.0f,  -MAP_H);
-			draw( MAP_W, -MAP_H);
-
-			draw(-MAP_W,  0.0f);
-			draw( 0.0f,   0.0f);
-			draw( MAP_W,  0.0f);
-
-			draw(-MAP_W,  MAP_H);
-			draw( 0.0f,   MAP_H);
-			draw( MAP_W,  MAP_H);
-		}
-
-		// draw enemies
-		for (int i = 0; i < enemy_count; i++) {
-			Enemy* e = &enemies[i];
-			// DrawCircleCam(e->x, e->y, e->radius, {255, 0, 0, 255});
-			DrawTextureCentered(e->texture, e->x, e->y, e->angle);
-		}
-
-		// draw player
-		{
-			DrawTextureCentered(tex_player_ship, player.x, player.y, player.dir);
-		}
-
-		for (int i = 0; i < bullet_count; i++) {
-			Bullet* b = &bullets[i];
-			DrawCircleCam(b->x, b->y, b->radius);
-		}
-
-		for (int i = 0; i < p_bullet_count; i++) {
-			Bullet* pb = &p_bullets[i];
-			DrawCircleCam(pb->x, pb->y, pb->radius);
-		}
-
-		// draw interface
-		if (!hide_interface || !interface_texture || !interface_map_texture) {
-			int map_w = 200;
-			int map_h = 200;
-			interface_update_t -= delta;
-			if (interface_update_t <= 0.0f) {
-				char buf[100];
-				SDL_snprintf(buf, sizeof(buf),
-							 "X: %f\n"
-							 "Y: %f\n"
-							 "POWER: %.2f",
-							 player.x,
-							 player.y,
-							 player.power);
-				SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(fnt_mincho, buf, {255, 255, 255, 255}, 0);
-				interface_texture = SDL_CreateTextureFromSurface(renderer, surf);
-				SDL_FreeSurface(surf);
-
-				if (!interface_map_texture) interface_map_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, map_w, map_h);
-				SDL_SetRenderTarget(renderer, interface_map_texture);
-				{
-					SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-					SDL_RenderClear(renderer);
-					
-					for (int i = 0; i < enemy_count; i++) {
-						SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-						if (enemies[i].type == 3) {
-							SDL_Rect r = {
-								(int)(enemies[i].x / MAP_W * (float)map_w),
-								(int)(enemies[i].y / MAP_H * (float)map_h),
-								2,
-								2
-							};
-							SDL_RenderFillRect(renderer, &r);
-						} else {
-							SDL_RenderDrawPoint(renderer,
-												(int)(enemies[i].x / MAP_W * (float)map_w),
-												(int)(enemies[i].y / MAP_H * (float)map_h));
-						}
-					}
-					
-					SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-					SDL_Rect r = {
-						(int)(player.x / MAP_W * (float)map_w),
-						(int)(player.y / MAP_H * (float)map_h),
-						2,
-						2
-					};
-					SDL_RenderFillRect(renderer, &r);
-				}
-				SDL_SetRenderTarget(renderer, nullptr);
-
-				interface_update_t = 5.0f;
-			}
-
-			int y;
-			{
-				SDL_Rect dest = {};
-				SDL_QueryTexture(interface_texture, nullptr, nullptr, &dest.w, &dest.h);
-				SDL_RenderCopy(renderer, interface_texture, nullptr, &dest);
-				y = dest.h;
-			}
-			{
-				// SDL_Rect dest = {0, y, map_w, map_h};
-				// SDL_RenderCopy(renderer, interface_map_texture, nullptr, &dest);
-
-				int w = 100;
-				int h = 100;
-				SDL_Rect src = {
-					(int)(player.x / MAP_W * (float)map_w) - w / 2,
-					(int)(player.y / MAP_H * (float)map_h) - h / 2,
-					w,
-					h
-				};
-				if (src.x < 0) src.x = 0;
-				if (src.y < 0) src.y = 0;
-				if (src.x > map_w - w - 1) src.x = map_w - w - 1;
-				if (src.y > map_h - h - 1) src.y = map_h - h - 1;
-				SDL_Rect dest = {10, y + 10, w, h};
-				SDL_RenderCopy(renderer, interface_map_texture, &src, &dest);
-			}
-
-			// draw fps
-			{
-				SDL_Rect dest;
-				SDL_QueryTexture(fps_texture, nullptr, nullptr, &dest.w, &dest.h);
-				dest.x = GAME_W - dest.w;
-				dest.y = GAME_H - dest.h;
-				SDL_RenderCopy(renderer, fps_texture, nullptr, &dest);
-			}
-		}
-
-		SDL_RenderPresent(renderer);
-	}
+	time += delta;
 
 #ifndef __EMSCRIPTEN__
-	time = GetTime();
-	double time_left = frame_end_time - time;
+	t = GetTime();
+	double time_left = frame_end_time - t;
 	if (time_left > 0.0) {
 		SDL_Delay((Uint32)(time_left * 0.95));
 		while (GetTime() < frame_end_time) {}
 	}
 #endif
+}
+
+void Game::update(float delta) {
+	update_player(delta);
+
+	for (int i = 0; i < enemy_count; i++) {
+		Enemy* e = &enemies[i];
+		if (e->type == 10) {
+			e->catch_up_timer -= delta;
+			if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
+
+			float rel_x;
+			float rel_y;
+			float dist;
+			if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
+				if (dist > 800.0f && e->catch_up_timer == 0.0f) {
+					e->catch_up_timer = 5.0f * 60.0f;
+				}
+
+				//float max_spd = (e->catch_up_timer > 0.0f) ? 14.0f : 8.0f;
+				float max_spd = 10.5f;
+
+				// float spd = length(e->hsp, e->vsp);
+				// float dir = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
+					
+				// float dir_target = dir - angle_difference(dir, point_direction(e->x, e->y, rel_x, rel_y));
+				// dir = approach(dir, dir_target, 1.5f * delta);
+				// spd += 0.2f;
+				// if (spd > max_spd) spd = max_spd;
+					
+				// e->hsp = lengthdir_x(spd, dir);
+				// e->vsp = lengthdir_y(spd, dir);
+				// e->angle = dir;
+
+				float dir = point_direction(e->x, e->y, rel_x, rel_y);
+				e->hsp += lengthdir_x(0.3f, dir) * delta;
+				e->vsp += lengthdir_y(0.3f, dir) * delta;
+				e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
+				if (length(e->hsp, e->vsp) > max_spd) {
+					e->hsp = lengthdir_x(max_spd, e->angle);
+					e->vsp = lengthdir_y(max_spd, e->angle);
+				}
+			}
+		}
+	}
+
+	physics_update(delta);
+
+	// :late update
+
+	{
+		Player* p = &player;
+		if (input_press & INPUT_FIRE) {
+			auto shoot = [p](float spd, float dir) {
+				Bullet* pb = game->CreatePlrBullet();
+				pb->x = p->x;
+				pb->y = p->y;
+
+				pb->x += lengthdir_x(20.0f, dir);
+				pb->y += lengthdir_y(20.0f, dir);
+
+				pb->hsp = p->hsp;
+				pb->vsp = p->vsp;
+
+				pb->hsp += lengthdir_x(spd, dir);
+				pb->vsp += lengthdir_y(spd, dir);
+
+				return pb;
+			};
+
+			if (p->power >= 50.0f) {
+				shoot(15.0f, p->dir - 4.0f);
+				shoot(15.0f, p->dir + 4.0f);
+			} else {
+				shoot(15.0f, p->dir);
+			}
+		}
+
+		p->invincibility -= delta;
+		if (p->invincibility < 0.0f) p->invincibility = 0.0f;
+
+		{
+			constexpr float f = 1.0f - 0.4f;
+			float target_x = p->x - (float)GAME_W / camera_scale / 2.0f;
+			float target_y = p->y - (float)GAME_H / camera_scale / 2.0f;
+			camera_x = lerp(camera_x, target_x, 1.0f - SDL_powf(f, delta));
+			camera_y = lerp(camera_y, target_y, 1.0f - SDL_powf(f, delta));
+		}
+	}
+
+	for (int i = 0; i < bullet_count; i++) {
+		Bullet* b = &bullets[i];
+		b->lifetime += delta;
+		if (b->lifetime >= b->lifespan) {
+			DestroyBullet(i);
+			i--;
+		}
+	}
+
+	for (int i = 0; i < p_bullet_count; i++) {
+		Bullet* pb = &p_bullets[i];
+		pb->lifetime += delta;
+		if (pb->lifetime >= pb->lifespan) {
+			DestroyPlrBullet(i);
+			i--;
+		}
+	}
+
+	if (mco_status(co) != MCO_DEAD) {
+		mco_resume(co);
+	}
+
+	for (int i = 0; i < enemy_count; i++) {
+		Enemy* e = &enemies[i];
+		if (e->co) {
+			if (mco_status(e->co) != MCO_DEAD) {
+				e->co->user_data = e;
+				mco_resume(e->co);
+			}
+		}
+	}
+}
+
+void Game::update_player(float delta) {
+	Player* p = &player;
+
+	p->focus = (input & INPUT_FOCUS) != 0;
+
+	auto decelerate = [p, delta](float dec) {
+		float l = length(p->hsp, p->vsp);
+		if (l > PLAYER_ACC) {
+			p->hsp -= dec * p->hsp / l * delta;
+			p->vsp -= dec * p->vsp / l * delta;
+		} else {
+			p->hsp = 0.0f;
+			p->vsp = 0.0f;
+		}
+	};
+
+	if (p->focus) {
+		if (input & INPUT_RIGHT) p->x += PLAYER_FOCUS_SPD * delta;
+		if (input & INPUT_UP)    p->y -= PLAYER_FOCUS_SPD * delta;
+		if (input & INPUT_LEFT)  p->x -= PLAYER_FOCUS_SPD * delta;
+		if (input & INPUT_DOWN)  p->y += PLAYER_FOCUS_SPD * delta;
+
+		decelerate(PLAYER_ACC * 2.0f);
+
+		float rel_x;
+		float rel_y;
+		float dist;
+		if (Enemy* e = find_closest(enemies, enemy_count,
+									p->x, p->y,
+									&rel_x, &rel_y, &dist,
+									[](Enemy* e) { return !(1 <= e->type && e->type <= 3); })) {
+			if (dist < 800.0f) {
+				constexpr float f = 1.0f - 0.05f;
+				float dir = point_direction(p->x, p->y, rel_x, rel_y);
+				float target = p->dir - angle_difference(p->dir, dir);
+				p->dir = lerp(p->dir, target, 1.0f - SDL_powf(f, delta));
+			}
+		}
+	} else {
+		{
+			float turn_spd = PLAYER_TURN_SPD;
+			if ((input & INPUT_UP) || (input & INPUT_DOWN)) {
+				turn_spd /= 2.0f;
+			}
+			if (input & INPUT_RIGHT) p->dir -= turn_spd * delta;
+			if (input & INPUT_LEFT)  p->dir += turn_spd * delta;
+		}
+				
+		if (input & INPUT_UP) {
+			// accelerate
+			float rad = p->dir / 180.0f * (float)M_PI;
+			p->hsp += PLAYER_ACC *  SDL_cosf(rad) * delta;
+			p->vsp += PLAYER_ACC * -SDL_sinf(rad) * delta;
+		} else {
+			float dec = (input & INPUT_DOWN) ? PLAYER_ACC : (PLAYER_ACC / 16.0f);
+			decelerate(dec);
+
+			// if ((input & INPUT_DOWN) && length(p->hsp, p->vsp) < 0.1f) {
+			// 	p->x -= lengthdir_x(2.0f, p->dir);
+			// 	p->y -= lengthdir_y(2.0f, p->dir);
+			// }
+		}
+	}
+
+	// limit speed
+	float player_spd = length(p->hsp, p->vsp);
+	if (player_spd > PLAYER_MAX_SPD) {
+		p->hsp = p->hsp / player_spd * PLAYER_MAX_SPD;
+		p->vsp = p->vsp / player_spd * PLAYER_MAX_SPD;
+	}
+}
+
+static bool enemy_get_damage(Enemy* e, float dmg, float split_dir) {
+	e->health -= dmg;
+
+	split_dir += (float)(-5 + rand() % 10);
+				
+	if (e->health <= 0.0f) {
+		if (e->type == 3) {
+			make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 2, e->power / 2.0f);
+			make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 2, e->power / 2.0f);
+		} else if (e->type == 2) {
+			make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 1, e->power / 2.0f);
+			make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->power / 2.0f);
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
+static void player_get_dmg(Player* p, float dmg) {
+	p->health -= dmg;
+	p->invincibility = 60.0f;
+}
+
+void Game::physics_update(float delta) {
+	{
+		Player* p = &player;
+		p->x += p->hsp * delta;
+		p->y += p->vsp * delta;
+
+		if (p->x < 0.0f) {p->x += MAP_W; camera_x += MAP_W;}
+		if (p->y < 0.0f) {p->y += MAP_H; camera_y += MAP_H;}
+		if (p->x >= MAP_W) {p->x -= MAP_W; camera_x -= MAP_W;}
+		if (p->y >= MAP_H) {p->y -= MAP_H; camera_y -= MAP_H;}
+	}
+
+	for (int i = 0; i < enemy_count; i++) {
+		Enemy* e = &enemies[i];
+			
+		e->x += e->hsp * delta;
+		e->y += e->vsp * delta;
+
+		if (e->x < 0.0f) e->x += MAP_W;
+		if (e->y < 0.0f) e->y += MAP_H;
+		if (e->x >= MAP_W) e->x -= MAP_W;
+		if (e->y >= MAP_H) e->y -= MAP_H;
+	}
+
+	for (int i = 0; i < bullet_count; i++) {
+		Bullet* b = &bullets[i];
+
+		b->x += b->hsp * delta;
+		b->y += b->vsp * delta;
+
+		if (b->x < 0.0f) b->x += MAP_W;
+		if (b->y < 0.0f) b->y += MAP_H;
+		if (b->x >= MAP_W) b->x -= MAP_W;
+		if (b->y >= MAP_H) b->y -= MAP_H;
+	}
+
+	for (int i = 0; i < p_bullet_count; i++) {
+		Bullet* pb = &p_bullets[i];
+
+		pb->x += pb->hsp * delta;
+		pb->y += pb->vsp * delta;
+
+		if (pb->x < 0.0f) pb->x += MAP_W;
+		if (pb->y < 0.0f) pb->y += MAP_H;
+		if (pb->x >= MAP_W) pb->x -= MAP_W;
+		if (pb->y >= MAP_H) pb->y -= MAP_H;
+	}
+
+	// :collision
+
+	{
+		Player* p = &player;
+
+		if (p->invincibility == 0.0f) {
+			for (int i = 0; i < bullet_count; i++) {
+				Bullet* b = &bullets[i];
+				if (circle_vs_circle(p->x, p->y, p->radius, b->x, b->y, b->radius)) {
+					player_get_dmg(p, b->dmg);
+					
+					DestroyBullet(i);
+					i--;
+
+					break;
+				}
+			}
+		}
+
+		if (p->invincibility == 0.0f) {
+			for (int i = 0, c = enemy_count; i < c; i++) {
+				Enemy* e = &enemies[i];
+
+				// if (!(1 <= e->type && e->type <= 3)) continue;
+
+				if (circle_vs_circle(p->x, p->y, p->radius, e->x, e->y, e->radius)) {
+					player_get_dmg(p, 1.0f);
+					
+					float split_dir = point_direction(p->x, p->y, e->x, e->y);
+					if (!enemy_get_damage(e, 1.0f, split_dir)) {
+						DestroyEnemy(i);
+						c--;
+						i--;
+					}
+
+					break;
+				}
+			}
+		}
+	}
+
+	for (int enemy_idx = 0, c = enemy_count; enemy_idx < c;) {
+		Enemy* e = &enemies[enemy_idx];
+
+		auto collide_with_bullets = [e](Bullet* bullets, int bullet_count, void (Game::*destroy)(int), bool give_power = false) {
+			for (int bullet_idx = 0; bullet_idx < bullet_count;) {
+				Bullet* b = &bullets[bullet_idx];
+
+				if (circle_vs_circle(e->x, e->y, e->radius, b->x, b->y, b->radius)) {
+					float split_dir = point_direction(b->x, b->y, e->x, e->y);
+
+					float dmg = b->dmg;
+					(game->*destroy)(bullet_idx);
+					bullet_count--;
+
+					if (!enemy_get_damage(e, dmg, split_dir)) {
+						if (give_power) game->player.power += e->power;
+						return false;
+					}
+					
+					continue;
+				}
+
+				bullet_idx++;
+			}
+
+			return true;
+		};
+
+		if (!collide_with_bullets(p_bullets, p_bullet_count, &Game::DestroyPlrBullet, true)) {
+			DestroyEnemy(enemy_idx);
+			c--;
+			continue;
+		}
+
+		// if (1 <= e->type && e->type <= 3) {
+		// 	if (!collide_with_bullets(bullets, bullet_count, &Game::DestroyBullet)) {
+		// 		DestroyEnemy(enemy_idx);
+		// 		c--;
+		// 		continue;
+		// 	}
+		// }
+			
+		enemy_idx++;
+	}
+}
+
+void Game::draw(float delta) {
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
+
+	// draw bg
+	auto draw_bg = [](SDL_Texture* texture, float parallax) {
+		float bg_w;
+		float bg_h;
+		{
+			int w;
+			int h;
+			SDL_QueryTexture(texture, nullptr, nullptr, &w, &h);
+			bg_w = (float)w;
+			bg_h = (float)h;
+		}
+		float cam_x_para = game->camera_x / parallax;
+		float cam_y_para = game->camera_y / parallax;
+			
+		float y = SDL_floorf(cam_y_para / bg_h) * bg_h;
+		while (y < cam_y_para + (float)GAME_H) {
+			float x = SDL_floorf(cam_x_para / bg_w) * bg_w;
+			while (x < cam_x_para + (float)GAME_W) {
+				SDL_FRect dest = {
+					SDL_floorf(x - cam_x_para),
+					SDL_floorf(y - cam_y_para),
+					bg_w,
+					bg_h
+				};
+				SDL_RenderCopyF(game->renderer, texture, nullptr, &dest);
+
+				x += bg_w;
+			}
+
+			y += bg_h;
+		}
+	};
+
+	draw_bg(tex_bg, 5.0f);
+	draw_bg(tex_bg1, 4.0f);
+
+	{
+		auto draw = [](float xoff, float yoff) {
+			int w;
+			int h;
+			SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
+			SDL_FRect dest = {
+				SDL_floorf(500.0f - (game->camera_x + xoff) / 5.0f),
+				SDL_floorf(500.0f - (game->camera_y + yoff) / 5.0f),
+				(float)w,
+				(float)h
+			};
+
+			SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
+			SDL_Rect screen = {0, 0, GAME_W, GAME_H};
+			if (!SDL_HasIntersection(&idest, &screen)) {
+				return;
+			}
+
+			SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
+		};
+
+		draw(-MAP_W, -MAP_H);
+		draw( 0.0f,  -MAP_H);
+		draw( MAP_W, -MAP_H);
+
+		draw(-MAP_W,  0.0f);
+		draw( 0.0f,   0.0f);
+		draw( MAP_W,  0.0f);
+
+		draw(-MAP_W,  MAP_H);
+		draw( 0.0f,   MAP_H);
+		draw( MAP_W,  MAP_H);
+	}
+
+	// draw enemies
+	for (int i = 0; i < enemy_count; i++) {
+		Enemy* e = &enemies[i];
+		if (show_hitboxes) DrawCircleCam(e->x, e->y, e->radius, {255, 0, 0, 255});
+		DrawTextureCentered(e->texture, e->x, e->y, e->angle);
+	}
+
+	// draw player
+	{
+		SDL_Color col = {255, 255, 255, 255};
+		if (player.invincibility > 0.0f) {
+			if (((int)time / 4) % 2) col.a = 64;
+			else col.a = 192;
+		}
+		DrawTextureCentered(tex_player_ship, player.x, player.y, player.dir, col);
+	}
+
+	for (int i = 0; i < bullet_count; i++) {
+		Bullet* b = &bullets[i];
+		DrawCircleCam(b->x, b->y, b->radius);
+	}
+
+	for (int i = 0; i < p_bullet_count; i++) {
+		Bullet* pb = &p_bullets[i];
+		DrawCircleCam(pb->x, pb->y, pb->radius);
+	}
+
+	// :ui
+	if (!hide_interface || !interface_map_texture) {
+		int map_w = 200;
+		int map_h = 200;
+		interface_update_timer -= delta;
+		if (interface_update_timer <= 0.0f || !interface_map_texture) {
+			interface_x = player.x;
+			interface_y = player.y;
+
+			if (!interface_map_texture) interface_map_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, map_w, map_h);
+			SDL_SetRenderTarget(renderer, interface_map_texture);
+			{
+				SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+				SDL_RenderClear(renderer);
+
+				for (int i = 0; i < enemy_count; i++) {
+					SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+					if (1 <= enemies[i].type && enemies[i].type <= 3) {
+						SDL_RenderDrawPoint(renderer,
+											(int)(enemies[i].x / MAP_W * (float)map_w),
+											(int)(enemies[i].y / MAP_H * (float)map_h));
+					} else {
+						SDL_Rect r = {
+							(int)(enemies[i].x / MAP_W * (float)map_w),
+							(int)(enemies[i].y / MAP_H * (float)map_h),
+							2,
+							2
+						};
+						SDL_RenderFillRect(renderer, &r);
+					}
+				}
+
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+				SDL_Rect r = {
+					(int)(player.x / MAP_W * (float)map_w),
+					(int)(player.y / MAP_H * (float)map_h),
+					2,
+					2
+				};
+				SDL_RenderFillRect(renderer, &r);
+			}
+			SDL_SetRenderTarget(renderer, nullptr);
+
+			interface_update_timer = 5.0f;
+		}
+
+		int y;
+		{
+			char buf[100];
+			SDL_snprintf(buf, sizeof(buf),
+						 "X: %f\n"
+						 "Y: %f\n"
+						 "POWER: %.2f",
+						 interface_x,
+						 interface_y,
+						 player.power);
+			y = DrawText(&fnt_mincho, buf, 0, 0).y + fnt_mincho.height;
+		}
+		{
+			// SDL_Rect dest = {0, y, map_w, map_h};
+			// SDL_RenderCopy(renderer, interface_map_texture, nullptr, &dest);
+
+			int w = 100;
+			int h = 100;
+			SDL_Rect src = {
+				(int)(player.x / MAP_W * (float)map_w) - w / 2,
+				(int)(player.y / MAP_H * (float)map_h) - h / 2,
+				w,
+				h
+			};
+			if (src.x < 0) src.x = 0;
+			if (src.y < 0) src.y = 0;
+			if (src.x > map_w - w - 1) src.x = map_w - w - 1;
+			if (src.y > map_h - h - 1) src.y = map_h - h - 1;
+			SDL_Rect dest = {10, y + 10, w, h};
+			SDL_RenderCopy(renderer, interface_map_texture, &src, &dest);
+		}
+
+		// draw fps
+		{
+			char buf[10];
+			SDL_snprintf(buf, sizeof(buf), "%.2f", fps);
+			DrawText(&fnt_mincho, buf, GAME_W, GAME_H, HALIGN_RIGHT, VALIGN_BOTTOM);
+		}
+	}
+
+	SDL_RenderPresent(renderer);
 }
 
 Enemy* Game::CreateEnemy() {

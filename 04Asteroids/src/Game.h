@@ -1,14 +1,16 @@
+#pragma once
+
 #ifdef _WIN32
 #include <SDL.h>
 #include <SDL_image.h>
-#include <SDL_ttf.h>
 #include <SDL_mixer.h>
 #else
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
 #endif
+
+#include "Font.h"
 
 #include "minicoro.h"
 
@@ -45,9 +47,12 @@ struct Player {
 	float y;
 	float hsp;
 	float vsp;
+	float radius = 10.0f;
 	float dir;
 	bool focus;
 	float power;
+	float invincibility;
+	float health = 100.0f;
 };
 
 struct Enemy {
@@ -55,9 +60,9 @@ struct Enemy {
 	float y;
 	float hsp;
 	float vsp;
-	float radius = 10.0f;
+	float radius = 15.0f;
 	int type;
-	float hp = 1.0f;
+	float health = 10.0f;
 	SDL_Texture* texture;
 	float power = 1.0f;
 	float angle;
@@ -76,7 +81,7 @@ struct Bullet {
 	float hsp;
 	float vsp;
 	float radius = 5.0f;
-	float dmg = 1.0f;
+	float dmg = 10.0f;
 	float lifespan = 2.0f * 60.0f;
 	float lifetime;
 };
@@ -85,6 +90,7 @@ struct Game {
 	Player player;
 	float camera_x;
 	float camera_y;
+	float camera_scale = 1.0f;
 	Enemy* enemies;
 	int enemy_count;
 	Bullet* bullets;
@@ -95,6 +101,7 @@ struct Game {
 	unsigned int input_press;
 	unsigned int input_release;
 	mco_coro* co;
+	float time;
 
 	SDL_Texture* tex_player_ship;
 	SDL_Texture* tex_bg;
@@ -104,7 +111,7 @@ struct Game {
 	SDL_Texture* tex_asteroid3;
 	SDL_Texture* tex_moon;
 
-	TTF_Font* fnt_mincho;
+	Font fnt_mincho;
 
 	SDL_Window* window;
 	SDL_Renderer* renderer;
@@ -112,16 +119,23 @@ struct Game {
 	bool quit;
 	double fps_sum;
 	double fps_timer;
-	SDL_Texture* fps_texture;
-	float interface_update_t;
-	SDL_Texture* interface_texture;
+	double fps;
+	float interface_update_timer;
+	float interface_x;
+	float interface_y;
 	SDL_Texture* interface_map_texture;
 	bool hide_interface;
+	bool show_hitboxes;
 
 	void Init();
 	void Quit();
 	void Run();
 	void Frame();
+
+	void update(float delta);
+	void draw(float delta);
+	void update_player(float delta);
+	void physics_update(float delta);
 
 	Enemy* CreateEnemy();
 	Bullet* CreateBullet();
