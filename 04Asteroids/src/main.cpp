@@ -5,6 +5,7 @@
 #include "Game.h"
 
 #define MINICORO_IMPL
+#define MCO_DEFAULT_STACK_SIZE 32768
 #include "minicoro.h"
 
 #ifdef __EMSCRIPTEN__
