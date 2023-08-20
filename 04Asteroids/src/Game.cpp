@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 #include "mathh.h"
+#include "misc.h"
 
 #define INTERFACE_MAP_W 200
 #define INTERFACE_MAP_H 200
@@ -59,6 +60,7 @@ static Bullet* shoot(Enemy* e, float spd, float dir) {
 	b->y = e->y;
 	b->hsp = e->hsp + lengthdir_x(spd, dir);
 	b->vsp = e->vsp + lengthdir_y(spd, dir);
+	play_sound(game->snd_shoot, e->x, e->y);
 	return b;
 }
 
@@ -68,6 +70,7 @@ static Bullet* _shoot(Enemy* e, float spd, float dir) {
 	b->y = e->y;
 	b->hsp = lengthdir_x(spd, dir);
 	b->vsp = lengthdir_y(spd, dir);
+	play_sound(game->snd_shoot, e->x, e->y);
 	return b;
 }
 
@@ -287,6 +290,25 @@ void Game::Init() {
 
 	LoadFont(&fnt_mincho, "assets/mincho.ttf", 22);
 
+	if (Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 2048) == 0) {
+		printf("opened audio device\n");
+	} else {
+		printf("didn't open audio device\n");
+	}
+
+	snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");
+	snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");
+	snd_shoot        = Mix_LoadWAV("assets/shoot.wav");
+	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");
+	snd_explode      = Mix_LoadWAV("assets/explode.wav");
+	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");
+	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");
+
+	Mix_VolumeChunk(snd_ship_engine, (int)(0.5f * (float)MIX_MAX_VOLUME));
+	Mix_VolumeChunk(snd_shoot,       (int)(0.5f * (float)MIX_MAX_VOLUME));
+
+	Mix_MasterVolume((int)(0.25f * (float)MIX_MAX_VOLUME));
+
 	player.x = (float)MAP_W / 2.0f;
 	player.y = (float)MAP_H / 2.0f;
 
@@ -300,28 +322,22 @@ void Game::Init() {
 	{
 		int i = 200;
 		while (i--) {
-			float x = game->random.range(0.0f, MAP_W);
-			float y = game->random.range(0.0f, MAP_H);
-			float dist = point_distance(x, y, game->player.x, game->player.y);
+			float x = random.range(0.0f, MAP_W);
+			float y = random.range(0.0f, MAP_H);
+			float dist = point_distance(x, y, player.x, player.y);
 			if (dist < 800.0f) {
 				i++;
 				continue;
 			}
 
-			float dir = game->random.range(0.0f, 360.0f);
-			float spd = game->random.range(1.0f, 3.0f);
-			make_asteroid(x, y, lengthdir_x(spd, dir), lengthdir_y(spd, dir), 1 + game->random.next() % 3);
+			float dir = random.range(0.0f, 360.0f);
+			float spd = random.range(1.0f, 3.0f);
+			make_asteroid(x, y, lengthdir_x(spd, dir), lengthdir_y(spd, dir), 1 + random.next() % 3);
 		}
 	}
 
 	mco_desc desc = mco_desc_init(spawn_enemies, 0);
 	mco_create(&co, &desc);
-
-	if (Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 2048) == 0) {
-		printf("opened audio device\n");
-	} else {
-		printf("didn't open audio device\n");
-	}
 
 	// prev_time = GetTime() - (1.0 / (double)GAME_FPS);
 
@@ -339,6 +355,14 @@ void Game::Quit() {
 	free(p_bullets);
 	free(bullets);
 	free(enemies);
+
+	Mix_FreeChunk(snd_powerup);
+	Mix_FreeChunk(snd_boss_explode);
+	Mix_FreeChunk(snd_explode);
+	Mix_FreeChunk(snd_hurt);
+	Mix_FreeChunk(snd_shoot);
+	Mix_FreeChunk(snd_player_shoot);
+	Mix_FreeChunk(snd_ship_engine);
 
 	DestroyFont(&fnt_mincho);
 
@@ -698,20 +722,29 @@ void Game::update(float delta) {
 					pb->hsp += lengthdir_x(spd, dir);
 					pb->vsp += lengthdir_y(spd, dir);
 
+					play_sound(game->snd_player_shoot, p->x, p->y);
+
 					return pb;
 				};
 
-				if (p->power >= 200.0f) {
-					shoot(20.0f, p->dir,  10.0f);
-					shoot(20.0f, p->dir, -10.0f);
+				switch (p->power_level) {
+					case 1: {
+						shoot(20.0f, p->dir);
+						break;
+					}
+					case 2: {
+						shoot(20.0f, p->dir - 4.0f);
+						shoot(20.0f, p->dir + 4.0f);
+						break;
+					}
+					case 3: {
+						shoot(20.0f, p->dir,  10.0f);
+						shoot(20.0f, p->dir, -10.0f);
 
-					shoot(20.0f, p->dir - 30.0f,  10.0f);
-					shoot(20.0f, p->dir + 30.0f, -10.0f);
-				} else if (p->power >= 50.0f) {
-					shoot(20.0f, p->dir - 4.0f);
-					shoot(20.0f, p->dir + 4.0f);
-				} else {
-					shoot(20.0f, p->dir);
+						shoot(20.0f, p->dir - 30.0f,  10.0f);
+						shoot(20.0f, p->dir + 30.0f, -10.0f);
+						break;
+					}
 				}
 
 				p->fire_queue--;
@@ -828,6 +861,10 @@ void Game::update_player(float delta) {
 			float rad = p->dir / 180.0f * (float)M_PI;
 			p->hsp += PLAYER_ACC *  SDL_cosf(rad) * delta;
 			p->vsp += PLAYER_ACC * -SDL_sinf(rad) * delta;
+
+			if ((int)time % 5 == 0) {
+				play_sound(snd_ship_engine, p->x, p->y);
+			}
 		} else {
 			float dec = (input & INPUT_DOWN) ? PLAYER_ACC : (PLAYER_ACC / 16.0f);
 			decelerate(p, dec, delta);
@@ -851,11 +888,13 @@ void Game::update_player(float delta) {
 	if (p->health > p->max_health) p->health = p->max_health;
 }
 
-static bool enemy_get_damage(Enemy* e, float dmg, float split_dir) {
+static bool enemy_get_hit(Enemy* e, float dmg, float split_dir) {
 	e->health -= dmg;
 
 	split_dir += game->random.range(-5.0f, 5.0f);
-				
+
+	play_sound(game->snd_hurt, e->x, e->y);
+
 	if (e->health <= 0.0f) {
 		switch (e->type) {
 			case 3: {
@@ -868,14 +907,24 @@ static bool enemy_get_damage(Enemy* e, float dmg, float split_dir) {
 				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->power / 2.0f);
 				break;
 			}
-			case 20: {
+			case 10: {
 				game->screenshake_intensity = 5.0f;
-				game->screenshake_time = 20.0f;
-				game->screenshake_timer = 20.0f;
+				game->screenshake_time = 10.0f;
+				game->screenshake_timer = 10.0f;
 				SDL_Delay(40);
 				break;
 			}
+			case 20: {
+				game->screenshake_intensity = 10.0f;
+				game->screenshake_time = 30.0f;
+				game->screenshake_timer = 30.0f;
+				SDL_Delay(50);
+				break;
+			}
 		}
+
+		if (e->type == 20) play_sound(game->snd_boss_explode, e->x, e->y);
+		else play_sound(game->snd_explode, e->x, e->y);
 
 		return false;
 	}
@@ -891,6 +940,8 @@ static void player_get_hit(Player* p, float dmg) {
 	game->screenshake_time = 10.0f;
 	game->screenshake_timer = 10.0f;
 	SDL_Delay(40);
+
+	play_sound(game->snd_hurt, p->x, p->y);
 }
 
 void Game::physics_update(float delta) {
@@ -970,7 +1021,7 @@ void Game::physics_update(float delta) {
 					player_get_hit(p, 10.0f);
 					
 					float split_dir = point_direction(p->x, p->y, e->x, e->y);
-					if (!enemy_get_damage(e, 10.0f, split_dir)) {
+					if (!enemy_get_hit(e, 10.0f, split_dir)) {
 						DestroyEnemy(i);
 						c--;
 						i--;
@@ -985,7 +1036,7 @@ void Game::physics_update(float delta) {
 	for (int enemy_idx = 0, c = enemy_count; enemy_idx < c;) {
 		Enemy* e = &enemies[enemy_idx];
 
-		auto collide_with_bullets = [e](Bullet* bullets, int bullet_count, void (Game::*destroy)(int), bool give_power = false) {
+		auto collide_with_bullets = [this, e](Bullet* bullets, int bullet_count, void (Game::*destroy)(int), bool give_power = false) {
 			for (int bullet_idx = 0; bullet_idx < bullet_count;) {
 				Bullet* b = &bullets[bullet_idx];
 
@@ -993,11 +1044,18 @@ void Game::physics_update(float delta) {
 					float split_dir = point_direction(b->x, b->y, e->x, e->y);
 
 					float dmg = b->dmg;
-					(game->*destroy)(bullet_idx);
+					(this->*destroy)(bullet_idx);
 					bullet_count--;
 
-					if (!enemy_get_damage(e, dmg, split_dir)) {
-						if (give_power) game->player.power += e->power;
+					if (!enemy_get_hit(e, dmg, split_dir)) {
+						if (give_power) {
+							player.power += e->power;
+							if (player.power >= 200.0f) {
+								if (player.power_level < 3) {player.power_level = 3; play_sound(snd_powerup, player.x, player.y);}
+							} else if (player.power >= 50.0f) {
+								if (player.power_level < 2) {player.power_level = 2; play_sound(snd_powerup, player.x, player.y);}
+							}
+						}
 						return false;
 					}
 					
@@ -1035,7 +1093,7 @@ void Game::draw(float delta) {
 	SDL_RenderClear(renderer);
 
 	// draw bg
-	auto draw_bg = [](SDL_Texture* texture, float parallax) {
+	auto draw_bg = [this](SDL_Texture* texture, float parallax) {
 		float bg_w;
 		float bg_h;
 		{
@@ -1045,8 +1103,8 @@ void Game::draw(float delta) {
 			bg_w = (float) w;
 			bg_h = (float) h;
 		}
-		float cam_x_para = game->camera_x / parallax;
-		float cam_y_para = game->camera_y / parallax;
+		float cam_x_para = camera_x / parallax;
+		float cam_y_para = camera_y / parallax;
 			
 		float y = SDL_floorf(cam_y_para / bg_h) * bg_h;
 		while (y < cam_y_para + (float)GAME_H) {
@@ -1058,7 +1116,7 @@ void Game::draw(float delta) {
 					bg_w,
 					bg_h
 				};
-				SDL_RenderCopyF(game->renderer, texture, nullptr, &dest);
+				SDL_RenderCopyF(renderer, texture, nullptr, &dest);
 
 				x += bg_w;
 			}
@@ -1072,13 +1130,13 @@ void Game::draw(float delta) {
 
 	// draw moon
 	{
-		auto draw = [](float xoff, float yoff) {
+		auto draw = [this](float xoff, float yoff) {
 			int w;
 			int h;
-			SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
+			SDL_QueryTexture(tex_moon, nullptr, nullptr, &w, &h);
 			SDL_FRect dest = {
-				SDL_floorf(500.0f - (game->camera_x + xoff) / 5.0f),
-				SDL_floorf(500.0f - (game->camera_y + yoff) / 5.0f),
+				SDL_floorf(500.0f - (camera_x + xoff) / 5.0f),
+				SDL_floorf(500.0f - (camera_y + yoff) / 5.0f),
 				(float) w,
 				(float) h
 			};
@@ -1089,7 +1147,7 @@ void Game::draw(float delta) {
 				return;
 			}
 
-			SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
+			SDL_RenderCopyF(renderer, tex_moon, nullptr, &dest);
 		};
 
 		draw(-MAP_W, -MAP_H);

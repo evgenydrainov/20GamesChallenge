@@ -52,6 +52,7 @@ struct Player {
 	float dir;
 	bool focus;
 	float power;
+	int power_level = 1;
 	float invincibility;
 	float health = 100.0f;
 	float max_health = 100.0f;
@@ -132,6 +133,12 @@ struct Game {
 	Font fnt_mincho;
 
 	Mix_Chunk* snd_ship_engine;
+	Mix_Chunk* snd_player_shoot;
+	Mix_Chunk* snd_shoot;
+	Mix_Chunk* snd_hurt;
+	Mix_Chunk* snd_explode;
+	Mix_Chunk* snd_boss_explode;
+	Mix_Chunk* snd_powerup;
 
 	SDL_Window* window;
 	SDL_Renderer* renderer;
