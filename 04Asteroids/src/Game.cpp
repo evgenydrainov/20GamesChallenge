@@ -18,6 +18,7 @@
 #define INTERFACE_MAP_H 200
 
 Game* game;
+static const char* chunk_names[ArrayLength(Game::chunks)];
 
 static double GetTime() {
 	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
@@ -296,13 +297,13 @@ void Game::Init() {
 		printf("didn't open audio device\n");
 	}
 
-	snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");
-	snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");
-	snd_shoot        = Mix_LoadWAV("assets/shoot.wav");
-	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");
-	snd_explode      = Mix_LoadWAV("assets/explode.wav");
-	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");
-	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");
+	snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");     chunk_names[0] = "ship_engine.wav";
+	snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");    chunk_names[1] = "player_shoot.wav";
+	snd_shoot        = Mix_LoadWAV("assets/shoot.wav");           chunk_names[2] = "shoot.wav";
+	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");            chunk_names[3] = "hurt.wav";
+	snd_explode      = Mix_LoadWAV("assets/explode.wav");         chunk_names[4] = "explode.wav";
+	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");    chunk_names[5] = "boss_explode.wav";
+	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");         chunk_names[6] = "powerup.wav";
 
 	Mix_VolumeChunk(snd_ship_engine, (int)(0.5f * (float)MIX_MAX_VOLUME));
 	Mix_VolumeChunk(snd_shoot,       (int)(0.5f * (float)MIX_MAX_VOLUME));
@@ -1310,6 +1311,23 @@ void Game::draw_ui(float delta) {
 		SDL_RenderCopy(renderer, interface_map_texture, &src, &dest);
 
 		y += h + 5 * 2;
+	}
+
+	for (int i = 0; i < MIX_CHANNELS; i++) {
+		const char* name = "";
+		if (Mix_Playing(i)) {
+			Mix_Chunk* chunk = Mix_GetChunk(i);
+			for (int j = 0; j < ArrayLength(chunks); j++) {
+				if (chunk == chunks[j]) {
+					name = chunk_names[j];
+					break;
+				}
+			}
+		}
+		char buf[100];
+		SDL_snprintf(buf, sizeof(buf), "%d %s", i, name);
+		DrawText(&fnt_mincho, buf, x, y);
+		y += 22;
 	}
 
 	// draw boss healthbar

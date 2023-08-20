@@ -133,6 +133,6 @@ void AnimateSprite(Sprite* sprite, float* frame_index, float delta) {
 
 	*frame_index += anim_spd * delta;
 	if ((int)(*frame_index) >= frame_count) {
-		*frame_index = (float)loop_frame + fmodf(*frame_index - (float)loop_frame, (float)(frame_count - loop_frame));
+		*frame_index = (float)loop_frame + SDL_fmodf(*frame_index - (float)loop_frame, (float)(frame_count - loop_frame));
 	}
 }

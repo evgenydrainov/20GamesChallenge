@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\vclib\\SDL-release-2.26.4\\include",
+                "C:\\vclib\\SDL_image-release-2.6.3\\include",
+                "C:\\vclib\\SDL_ttf-release-2.20.2\\include",
+                "C:\\vclib\\SDL_mixer-release-2.6.3\\include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.19041.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}

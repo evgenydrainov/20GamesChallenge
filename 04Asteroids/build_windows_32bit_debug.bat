@@ -4,7 +4,7 @@ mkdir out
 pushd out
 
 cl^
- /Zi /MDd^
+ /Zi /MDd /std:c++14^
  /IC:\vclib\SDL-release-2.26.4\include^
  /IC:\vclib\SDL_image-release-2.6.3\include^
  /IC:\vclib\SDL_ttf-release-2.20.2\include^
