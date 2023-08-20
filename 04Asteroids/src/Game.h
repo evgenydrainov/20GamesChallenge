@@ -137,12 +137,13 @@ struct Game {
 			Mix_Chunk* snd_ship_engine;
 			Mix_Chunk* snd_player_shoot;
 			Mix_Chunk* snd_shoot;
+			Mix_Chunk* snd_boss_shoot;
 			Mix_Chunk* snd_hurt;
 			Mix_Chunk* snd_explode;
 			Mix_Chunk* snd_boss_explode;
 			Mix_Chunk* snd_powerup;
 		};
-		Mix_Chunk* chunks[7];
+		Mix_Chunk* chunks[8];
 	};
 
 	SDL_Window* window;

@@ -14,6 +14,8 @@
 #include "mathh.h"
 #include "misc.h"
 
+#include "scripts.h"
+
 #define INTERFACE_MAP_W 200
 #define INTERFACE_MAP_H 200
 
@@ -49,205 +51,6 @@ static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type, fl
 	return e;
 }
 
-static void wait(mco_coro* co, int t) {
-	while (t--) {
-		mco_yield(co);
-	}
-}
-
-static Bullet* shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
-	b->x = e->x;
-	b->y = e->y;
-	b->hsp = e->hsp + lengthdir_x(spd, dir);
-	b->vsp = e->vsp + lengthdir_y(spd, dir);
-	play_sound(game->snd_shoot, e->x, e->y);
-	return b;
-}
-
-static Bullet* _shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
-	b->x = e->x;
-	b->y = e->y;
-	b->hsp = lengthdir_x(spd, dir);
-	b->vsp = lengthdir_y(spd, dir);
-	play_sound(game->snd_shoot, e->x, e->y);
-	return b;
-}
-
-#define self ((Enemy*)(co->user_data))
-
-static void enemy_ship(mco_coro* co) {
-	wait(co, game->random.next() % (2 * 60));
-
-	while (true) {
-		for (int i = 5; i--;) {
-			shoot(self,
-				  10.0f,
-				  self->angle);
-			
-			wait(co, 10);
-		}
-
-		wait(co, 2 * 60);
-	}
-}
-
-template <typename F>
-static void shoot_radial(mco_coro* co, int n, float dir_diff, const F& f) {
-	for (int i = 0; i < n; i++) {
-		float a = -((float)n - 1.0f) / 2.0f + (float)i;
-		Bullet* b = f(co, i);
-
-		float spd = length(b->hsp, b->vsp);
-		float dir = point_direction(0.0f, 0.0f, b->hsp, b->vsp);
-		dir += a * dir_diff;
-		b->hsp = lengthdir_x(spd, dir);
-		b->vsp = lengthdir_y(spd, dir);
-
-		b->hsp += self->hsp;
-		b->vsp += self->vsp;
-	}
-}
-
-static void invader_script2(mco_coro* co) {
-	float dir = 0.0f;
-	while (true) {
-		shoot_radial(co, 15, 360.0f / 15.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 6.5f, point_direction(self->x, self->y, game->player.x, game->player.y));
-			b->lifespan *= 2.0f;
-			return b;
-		});
-
-		for (int i = 10; i--;) {
-			shoot(self, 6.0f, dir)->lifespan *= 2.0f;
-			shoot(self, 6.0f, dir + 90.0f)->lifespan *= 2.0f;
-			shoot(self, 6.0f, dir + 180.0f)->lifespan *= 2.0f;
-			shoot(self, 6.0f, dir + 270.0f)->lifespan *= 2.0f;
-
-			dir += 10.0f;
-			wait(co, 10);
-		}
-	}
-}
-
-static void invader_script3(mco_coro* co) {
-	while (true) {
-		shoot_radial(co, 19, 360.0f / 19.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 4.0f, point_direction(self->x, self->y, game->player.x, game->player.y));
-			b->lifespan *= 2.0f;
-			return b;
-		});
-
-		shoot_radial(co, 21, 360.0f / 21.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 6.0f, point_direction(self->x, self->y, game->player.x, game->player.y));
-			b->lifespan *= 2.0f;
-			return b;
-		});
-
-		wait(co, 30);
-	}
-}
-
-static void invader_script4(mco_coro* co) {
-	float dir = 0.0f;
-	float d   = 0.0f;
-	while (true) {
-		shoot(self, 5.0f, (float)dir)->lifespan *= 2.0f;
-		shoot(self, 5.0f, (float)dir + 180.0f)->lifespan *= 2.0f;
-
-		dir += d;
-		d   += 0.5f;
-		dir = SDL_fmodf(dir, 360.0f);
-		d   = SDL_fmodf(d,   360.0f);
-
-		wait(co, 1);
-	}
-}
-
-static void spawn_enemies(mco_coro* co) {
-	auto spawn_ships = [](mco_coro* co, int i) {
-		float dir = game->random.range(0.0f, 360.0f);
-		float x = game->player.x - lengthdir_x(4000.0f, dir);
-		float y = game->player.y - lengthdir_y(4000.0f, dir);
-
-		while (i--) {
-			Enemy* e = game->CreateEnemy();
-			
-			e->x = x;
-			e->y = y;
-			e->max_spd = game->random.range(10.0f, 11.0f);
-			e->hsp = lengthdir_x(e->max_spd, game->player.dir);
-			e->vsp = lengthdir_y(e->max_spd, game->player.dir);
-			e->angle = game->player.dir;
-
-			e->type = 10;
-			e->sprite = &game->spr_player_ship;
-			mco_desc desc = mco_desc_init(enemy_ship, 0);
-			mco_create(&e->co, &desc);
-			e->acc = game->random.range(0.25f, 0.35f);
-
-			x += game->random.range(-50.0f, 50.0f);
-			y += game->random.range(-50.0f, 50.0f);
-
-			wait(co, 30);
-		}
-	};
-
-	auto enemy_count = []() {
-		int result = 0;
-		for (int i = 0; i < game->enemy_count; i++) {
-			if (game->enemies[i].type >= 10) {
-				result++;
-			}
-		}
-		return result;
-	};
-
-	// game->player.power = 50;
-	// goto l_boss;
-
-	wait(co, 40 * 60);
-
-	for (int i = 5; i--;) {
-		spawn_ships(co, 1);
-		wait(co, 15 * 60);
-		while (enemy_count() > 0) wait(co, 1);
-	}
-
-	for (int i = 3; i--;) {
-		spawn_ships(co, 3);
-		wait(co, 20 * 60);
-		while (enemy_count() > 0) wait(co, 1);
-	}
-
-	for (int i = 2; i--;) {
-		spawn_ships(co, 5);
-		wait(co, 20 * 60);
-		while (enemy_count() > 0) wait(co, 1);
-	}
-
-	l_boss:
-	{
-		float dir = game->random.range(0.0f, 360.0f);
-		float x = game->player.x - lengthdir_x(1500.0f, dir);
-		float y = game->player.y - lengthdir_y(1500.0f, dir);
-
-		Enemy* e = game->CreateEnemy();
-		e->x = x;
-		e->y = y;
-		e->radius = 25.0f;
-		e->type = 20;
-		e->health = 2000.0f;
-		e->max_health = 2000.0f;
-		e->sprite = &game->spr_invader;
-		mco_desc desc = mco_desc_init(invader_script2, 0);
-		mco_create(&e->co, &desc);
-	}
-}
-
-#undef self
-
 void Game::Init() {
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
@@ -269,7 +72,6 @@ void Game::Init() {
 								  SDL_RENDERER_ACCELERATED
 								  | SDL_RENDERER_TARGETTEXTURE);
 
-	SDL_RenderSetLogicalSize(renderer, GAME_W, GAME_H);
 	// SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	game_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, GAME_W, GAME_H);
@@ -300,13 +102,14 @@ void Game::Init() {
 	snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");     chunk_names[0] = "ship_engine.wav";
 	snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");    chunk_names[1] = "player_shoot.wav";
 	snd_shoot        = Mix_LoadWAV("assets/shoot.wav");           chunk_names[2] = "shoot.wav";
-	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");            chunk_names[3] = "hurt.wav";
-	snd_explode      = Mix_LoadWAV("assets/explode.wav");         chunk_names[4] = "explode.wav";
-	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");    chunk_names[5] = "boss_explode.wav";
-	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");         chunk_names[6] = "powerup.wav";
+	snd_boss_shoot   = Mix_LoadWAV("assets/boss_shoot.wav");      chunk_names[3] = "boss_shoot.wav";
+	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");            chunk_names[4] = "hurt.wav";
+	snd_explode      = Mix_LoadWAV("assets/explode.wav");         chunk_names[5] = "explode.wav";
+	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");    chunk_names[6] = "boss_explode.wav";
+	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");         chunk_names[7] = "powerup.wav";
 
 	Mix_VolumeChunk(snd_ship_engine, (int)(0.5f * (float)MIX_MAX_VOLUME));
-	Mix_VolumeChunk(snd_shoot,       (int)(0.5f * (float)MIX_MAX_VOLUME));
+	Mix_VolumeChunk(snd_boss_shoot,  (int)(0.5f * (float)MIX_MAX_VOLUME));
 
 	Mix_MasterVolume((int)(0.25f * (float)MIX_MAX_VOLUME));
 
@@ -361,6 +164,7 @@ void Game::Quit() {
 	Mix_FreeChunk(snd_boss_explode);
 	Mix_FreeChunk(snd_explode);
 	Mix_FreeChunk(snd_hurt);
+	Mix_FreeChunk(snd_boss_shoot);
 	Mix_FreeChunk(snd_shoot);
 	Mix_FreeChunk(snd_player_shoot);
 	Mix_FreeChunk(snd_ship_engine);
@@ -706,8 +510,8 @@ void Game::update(float delta) {
 			}
 
 			if (p->fire_queue > 0) {
-				auto shoot = [p](float spd, float dir, float hoff = 0.0f) {
-					Bullet* pb = game->CreatePlrBullet();
+				auto shoot = [this, p](float spd, float dir, float hoff = 0.0f) {
+					Bullet* pb = CreatePlrBullet();
 					pb->x = p->x;
 					pb->y = p->y;
 
@@ -723,7 +527,8 @@ void Game::update(float delta) {
 					pb->hsp += lengthdir_x(spd, dir);
 					pb->vsp += lengthdir_y(spd, dir);
 
-					play_sound(game->snd_player_shoot, p->x, p->y);
+					stop_sound(snd_player_shoot);
+					play_sound(snd_player_shoot, p->x, p->y);
 
 					return pb;
 				};
@@ -864,6 +669,7 @@ void Game::update_player(float delta) {
 			p->vsp += PLAYER_ACC * -SDL_sinf(rad) * delta;
 
 			if ((int)time % 5 == 0) {
+				stop_sound(snd_ship_engine);
 				play_sound(snd_ship_engine, p->x, p->y);
 			}
 		} else {
@@ -894,7 +700,7 @@ static bool enemy_get_hit(Enemy* e, float dmg, float split_dir) {
 
 	split_dir += game->random.range(-5.0f, 5.0f);
 
-	play_sound(game->snd_hurt, e->x, e->y);
+	// play_sound(game->snd_hurt, e->x, e->y);
 
 	if (e->health <= 0.0f) {
 		switch (e->type) {
@@ -942,6 +748,7 @@ static void player_get_hit(Player* p, float dmg) {
 	game->screenshake_timer = 10.0f;
 	SDL_Delay(40);
 
+	stop_sound(game->snd_hurt);
 	play_sound(game->snd_hurt, p->x, p->y);
 }
 
@@ -1088,6 +895,8 @@ void Game::physics_update(float delta) {
 }
 
 void Game::draw(float delta) {
+	SDL_RenderSetLogicalSize(renderer, GAME_W, GAME_H);
+
 	SDL_SetRenderTarget(renderer, game_texture);
 
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -1205,6 +1014,33 @@ void Game::draw(float delta) {
 
 	SDL_RenderCopy(renderer, game_texture, nullptr, nullptr);
 
+	int x = 0;
+	int y = 0;
+	// draw audio channels
+	{
+		int window_w;
+		int window_h;
+		SDL_GetWindowSize(window, &window_w, &window_h);
+		SDL_RenderSetLogicalSize(renderer, window_w, window_h);
+
+		for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
+			const char* name = "";
+			if (Mix_Playing(i)) {
+				Mix_Chunk* chunk = Mix_GetChunk(i);
+				for (int j = 0; j < ArrayLength(chunks); j++) {
+					if (chunk == chunks[j]) {
+						name = chunk_names[j];
+						break;
+					}
+				}
+			}
+			char buf[100];
+			SDL_snprintf(buf, sizeof(buf), "%d %s", i, name);
+			DrawText(&fnt_mincho, buf, x, y);
+			y += 22;
+		}
+	}
+
 	/*
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
@@ -1311,23 +1147,6 @@ void Game::draw_ui(float delta) {
 		SDL_RenderCopy(renderer, interface_map_texture, &src, &dest);
 
 		y += h + 5 * 2;
-	}
-
-	for (int i = 0; i < MIX_CHANNELS; i++) {
-		const char* name = "";
-		if (Mix_Playing(i)) {
-			Mix_Chunk* chunk = Mix_GetChunk(i);
-			for (int j = 0; j < ArrayLength(chunks); j++) {
-				if (chunk == chunks[j]) {
-					name = chunk_names[j];
-					break;
-				}
-			}
-		}
-		char buf[100];
-		SDL_snprintf(buf, sizeof(buf), "%d %s", i, name);
-		DrawText(&fnt_mincho, buf, x, y);
-		y += 22;
 	}
 
 	// draw boss healthbar
