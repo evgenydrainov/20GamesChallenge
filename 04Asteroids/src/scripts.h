@@ -4,7 +4,30 @@ static void wait(mco_coro* co, int t) {
 	}
 }
 
+static Bullet* shoot(Enemy* e, float spd, float dir) {
+	Bullet* b = game->CreateBullet();
+	b->x = e->x;
+	b->y = e->y;
+	b->hsp = e->hsp + lengthdir_x(spd, dir);
+	b->vsp = e->vsp + lengthdir_y(spd, dir);
+
+	play_sound(game->snd_shoot, e->x, e->y);
+
+	return b;
+}
+
+static Bullet* _shoot(Enemy* e, float spd, float dir) {
+	Bullet* b = game->CreateBullet();
+	b->x = e->x;
+	b->y = e->y;
+	b->hsp = lengthdir_x(spd, dir);
+	b->vsp = lengthdir_y(spd, dir);
+
+	return b;
+}
+
 #define self ((Enemy*)(co->user_data))
+
 template <typename F>
 static void shoot_radial(mco_coro* co, int n, float dir_diff, const F& f) {
 	for (int i = 0; i < n; i++) {
@@ -20,11 +43,14 @@ static void shoot_radial(mco_coro* co, int n, float dir_diff, const F& f) {
 		b->hsp += self->hsp;
 		b->vsp += self->vsp;
 	}
+
+	play_sound(game->snd_shoot, self->x, self->y);
 }
-#undef self
 
 #include "enemy_scripts.h"
 #include "boss_scripts.h"
+
+#undef self
 
 static void spawn_enemies(mco_coro* co) {
 	auto spawn_ships = [](mco_coro* co, int i) {

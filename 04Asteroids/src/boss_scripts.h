@@ -1,33 +1,3 @@
-static Bullet* boss_shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
-	b->x = e->x;
-	b->y = e->y;
-	b->hsp = e->hsp + lengthdir_x(spd, dir);
-	b->vsp = e->vsp + lengthdir_y(spd, dir);
-
-	stop_sound(game->snd_boss_shoot);
-	play_sound(game->snd_shoot, e->x, e->y); // play_sound(game->snd_boss_shoot, e->x, e->y);
-
-	return b;
-}
-
-static Bullet* _boss_shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
-	b->x = e->x;
-	b->y = e->y;
-	b->hsp = lengthdir_x(spd, dir);
-	b->vsp = lengthdir_y(spd, dir);
-
-	stop_sound(game->snd_boss_shoot);
-	play_sound(game->snd_shoot, e->x, e->y); // play_sound(game->snd_boss_shoot, e->x, e->y);
-
-	return b;
-}
-
-#define self ((Enemy*)(co->user_data))
-#define shoot boss_shoot
-#define _shoot _boss_shoot
-
 static void invader_script2(mco_coro* co) {
 	float dir = 0.0f;
 	while (true) {
@@ -82,7 +52,3 @@ static void invader_script4(mco_coro* co) {
 		wait(co, 1);
 	}
 }
-
-#undef self
-#undef shoot
-#undef _shoot

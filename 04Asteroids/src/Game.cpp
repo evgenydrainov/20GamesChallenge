@@ -20,11 +20,9 @@
 #define INTERFACE_MAP_H 200
 
 Game* game;
+double channel_when_played[MY_MIX_CHANNELS];
+int channel_priority[MY_MIX_CHANNELS];
 static const char* chunk_names[ArrayLength(Game::chunks)];
-
-static double GetTime() {
-	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
-}
 
 static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type, float power = 1.0f) {
 	Enemy* e = game->CreateEnemy();
@@ -430,9 +428,21 @@ void Game::Frame() {
 		input_release =  prev & ~input;
 	}
 
-	update(delta);
+	{
+		double t = GetTime();
 
-	draw(delta);
+		update(delta);
+
+		update_took = (GetTime() - t) * 1000.0;
+	}
+
+	{
+		double t = GetTime();
+
+		draw(delta);
+
+		draw_took = (GetTime() - t) * 1000.0;
+	}
 
 	time += delta;
 
@@ -532,9 +542,6 @@ void Game::update(float delta) {
 					pb->hsp += lengthdir_x(spd, dir);
 					pb->vsp += lengthdir_y(spd, dir);
 
-					stop_sound(snd_player_shoot);
-					play_sound(snd_shoot, p->x, p->y); // play_sound(snd_player_shoot, p->x, p->y);
-
 					return pb;
 				};
 
@@ -557,6 +564,9 @@ void Game::update(float delta) {
 						break;
 					}
 				}
+
+				stop_sound(snd_player_shoot);
+				play_sound(snd_shoot, p->x, p->y, 10); // play_sound(snd_player_shoot, p->x, p->y);
 
 				p->fire_queue--;
 			}
@@ -700,12 +710,14 @@ void Game::update_player(float delta) {
 	if (p->health > p->max_health) p->health = p->max_health;
 }
 
-static bool enemy_get_hit(Enemy* e, float dmg, float split_dir) {
+static bool enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound = true) {
 	e->health -= dmg;
 
 	split_dir += game->random.range(-5.0f, 5.0f);
 
-	play_sound(game->snd_hurt, e->x, e->y);
+	if (_play_sound) {
+		play_sound(game->snd_hurt, e->x, e->y);
+	}
 
 	if (e->health <= 0.0f) {
 		switch (e->type) {
@@ -753,7 +765,7 @@ static void player_get_hit(Player* p, float dmg) {
 	game->screenshake_timer = 10.0f;
 	SDL_Delay(40);
 
-	stop_sound(game->snd_hurt);
+	// stop_sound(game->snd_hurt);
 	play_sound(game->snd_hurt, p->x, p->y);
 }
 
@@ -834,7 +846,7 @@ void Game::physics_update(float delta) {
 					player_get_hit(p, 10.0f);
 					
 					float split_dir = point_direction(p->x, p->y, e->x, e->y);
-					if (!enemy_get_hit(e, 10.0f, split_dir)) {
+					if (!enemy_get_hit(e, 10.0f, split_dir, false)) {
 						DestroyEnemy(i);
 						c--;
 						i--;
@@ -900,7 +912,7 @@ void Game::physics_update(float delta) {
 }
 
 void Game::draw(float delta) {
-	SDL_RenderSetLogicalSize(renderer, GAME_W, GAME_H);
+	// SDL_RenderSetLogicalSize(renderer, GAME_W, GAME_H);
 
 	SDL_SetRenderTarget(renderer, game_texture);
 
@@ -1023,29 +1035,39 @@ void Game::draw(float delta) {
 		int window_w;
 		int window_h;
 		SDL_GetWindowSize(window, &window_w, &window_h);
-		SDL_RenderSetLogicalSize(renderer, window_w, window_h);
+		// SDL_RenderSetLogicalSize(renderer, window_w, window_h);
 	}
 	
 	int x = 0;
-	int y = 0;
+	int y = 200;
+	if (show_debug_info) {
+		char buf[100];
+		SDL_snprintf(buf, sizeof(buf),
+					 "update: %.2fms\n"
+					 "draw: %.2fms",
+					 update_took,
+					 draw_took);
+		y = DrawText(&fnt_mincho, buf, x, y).y + fnt_mincho.height + 10;
+	}
 	if (show_audio_channels) {
 		// draw audio channels
 
 		for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
 			const char* name = "";
-			if (Mix_Playing(i)) {
-				Mix_Chunk* chunk = Mix_GetChunk(i);
-				for (int j = 0; j < ArrayLength(chunks); j++) {
-					if (chunk == chunks[j]) {
-						name = chunk_names[j];
-						break;
-					}
+			Mix_Chunk* chunk = Mix_GetChunk(i);
+			for (int j = 0; j < ArrayLength(chunks); j++) {
+				if (chunk == chunks[j]) {
+					name = chunk_names[j];
+					break;
 				}
 			}
 			char buf[100];
-			SDL_snprintf(buf, sizeof(buf), "%d %s", i, name);
-			DrawText(&fnt_mincho, buf, x, y);
-			y += 22;
+			SDL_snprintf(buf, sizeof(buf), "%d %.2f %d %s", i, channel_when_played[i], channel_priority[i], name);
+			// SDL_Color col = Mix_Playing(i) ? SDL_Color{128, 255, 128, 255} : SDL_Color{255, 128, 128, 255};
+			// SDL_Color col = Mix_Playing(i) ? SDL_Color{64, 255, 64, 255} : SDL_Color{255, 255, 255, 255};
+			SDL_Color col = Mix_Playing(i) ? SDL_Color{255, 255, 255, 255} : SDL_Color{128, 128, 128, 255};
+			DrawText(&fnt_mincho, buf, x, y, 0, 0, col);
+			y += fnt_mincho.lineskip;
 		}
 	}
 
@@ -1189,7 +1211,8 @@ void Game::draw_ui(float delta) {
 Enemy* Game::CreateEnemy() {
 	if (enemy_count == MAX_ENEMIES) {
 		printf("enemy limit hit\n");
-		enemy_count--;
+		// enemy_count--;
+		DestroyEnemy(0);
 	}
 
 	Enemy* result = &enemies[enemy_count];
@@ -1202,7 +1225,8 @@ Enemy* Game::CreateEnemy() {
 Bullet* Game::CreateBullet() {
 	if (bullet_count == MAX_BULLETS) {
 		printf("bullet limit hit\n");
-		bullet_count--;
+		// bullet_count--;
+		DestroyBullet(0);
 	}
 
 	Bullet* result = &bullets[bullet_count];
@@ -1215,7 +1239,8 @@ Bullet* Game::CreateBullet() {
 Bullet* Game::CreatePlrBullet() {
 	if (p_bullet_count == MAX_PLR_BULLETS) {
 		printf("plr bullet limit hit\n");
-		p_bullet_count--;
+		// p_bullet_count--;
+		DestroyPlrBullet(0);
 	}
 
 	Bullet* result = &p_bullets[p_bullet_count];

@@ -1,3 +1,7 @@
+static double GetTime() {
+	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
+}
+
 static void stop_sound(Mix_Chunk* chunk) {
 	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
 		if (Mix_Playing(i)) {
@@ -19,7 +23,7 @@ static bool sound_playing(Mix_Chunk* chunk) {
 	return false;
 }
 
-static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
+static int play_sound_3d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	float dist = INFINITY;
 	auto check_dist = [&dist](float x, float y) {
 		float center_x = game->camera_x + (float)GAME_W / 2.0f;
@@ -39,7 +43,7 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
 	check_dist(x,         y + MAP_H);
 	check_dist(x + MAP_W, y + MAP_H);
 
-	float volume = 1.0f - dist / 1000.0f;
+	float volume = 1.0f - dist / 800.0f;
 	if (volume < 0.0f) volume = 0.0f;
 	if (volume > 1.0f) volume = 1.0f;
 
@@ -57,7 +61,43 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
 	float right = pan / 0.5f;
 	if (right > 1.0f) right = 1.0f;
 
-	// stop_sound(chunk);
+	{
+		auto count_instances_of_this_chunk = [chunk]() {
+			int result = 0;
+			for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
+				if (Mix_Playing(i) && Mix_GetChunk(i) == chunk) {
+					result++;
+				}
+			}
+			return result;
+		};
+
+		int instances_of_this_chunk = count_instances_of_this_chunk();
+
+		while (instances_of_this_chunk >= 2) {
+			double earliest_time = INFINITY;
+			int earliest_channel = -1;
+			for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
+				if (Mix_Playing(i) && Mix_GetChunk(i) == chunk && channel_priority[i] <= priority) {
+					if (channel_when_played[i] < earliest_time) {
+						earliest_time = channel_when_played[i];
+						earliest_channel = i;
+					}
+				}
+			}
+
+			if (earliest_channel == -1) {
+				break;
+			}
+
+			Mix_HaltChannel(earliest_channel);
+			instances_of_this_chunk--;
+		}
+
+		if (instances_of_this_chunk >= 2) {
+			return -1;
+		}
+	}
 
 	bool has_free = false;
 	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
@@ -68,11 +108,12 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
 	}
 
 	if (!has_free) {
-		int channels = Mix_AllocateChannels(-1);
-		Mix_AllocateChannels(channels + 1);
+		return -1;
 	}
 
 	int channel = Mix_PlayChannel(-1, chunk, 0);
+	channel_when_played[channel] = GetTime();
+	channel_priority[channel] = priority;
 
 	Mix_SetPanning(channel, (Uint8)(left * 255.0f), (Uint8)(right * 255.0f));
 	Mix_SetDistance(channel, (Uint8)((1.0f - volume) * 255.0f));
@@ -80,7 +121,7 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
 	return channel;
 }
 
-static int play_sound_2d(Mix_Chunk* chunk, float x, float y) {
+static int play_sound_2d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	auto check_if_on_screen = [](float x, float y) {
 		x -= game->camera_x;
 		y -= game->camera_y;
@@ -120,14 +161,16 @@ static int play_sound_2d(Mix_Chunk* chunk, float x, float y) {
 	}
 
 	int channel = Mix_PlayChannel(-1, chunk, 0);
+	channel_when_played[channel] = GetTime();
+	channel_priority[channel] = priority;
 
 	return channel;
 }
 
-static int play_sound(Mix_Chunk* chunk, float x, float y) {
+static int play_sound(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	if (game->audio_3d) {
-		return play_sound_3d(chunk, x, y);
+		return play_sound_3d(chunk, x, y, priority);
 	} else {
-		return play_sound_2d(chunk, x, y);
+		return play_sound_2d(chunk, x, y, priority);
 	}
 }

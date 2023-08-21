@@ -33,6 +33,8 @@
 #define ASTEROID_RADIUS_2 25.0f
 #define ASTEROID_RADIUS_1 12.0f
 
+#define MY_MIX_CHANNELS 8
+
 enum {
 	INPUT_RIGHT = 1,
 	INPUT_UP    = 1 << 1,
@@ -118,7 +120,7 @@ struct Game {
 	float screenshake_time;
 	float screenshake_timer;
 
-	bool audio_3d = false;
+	bool audio_3d = true;
 
 	SDL_Texture* tex_bg;
 	SDL_Texture* tex_bg1;
@@ -162,7 +164,9 @@ struct Game {
 	SDL_Texture* interface_map_texture;
 	bool hide_interface;
 	bool show_hitboxes;
-	bool show_audio_channels;
+	bool show_audio_channels = true;
+	bool show_debug_info = true;
+	double update_took, draw_took;
 
 	void Init();
 	void Quit();
@@ -185,3 +189,5 @@ struct Game {
 };
 
 extern Game* game;
+extern double channel_when_played[MY_MIX_CHANNELS];
+extern int channel_priority[MY_MIX_CHANNELS];
