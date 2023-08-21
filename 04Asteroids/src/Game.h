@@ -118,6 +118,8 @@ struct Game {
 	float screenshake_time;
 	float screenshake_timer;
 
+	bool audio_3d = false;
+
 	SDL_Texture* tex_bg;
 	SDL_Texture* tex_bg1;
 	SDL_Texture* tex_moon;
@@ -160,6 +162,7 @@ struct Game {
 	SDL_Texture* interface_map_texture;
 	bool hide_interface;
 	bool show_hitboxes;
+	bool show_audio_channels;
 
 	void Init();
 	void Quit();

@@ -4,10 +4,6 @@
 
 #include "Game.h"
 
-#define MINICORO_IMPL
-#define MCO_DEFAULT_STACK_SIZE 32768
-#include "minicoro.h"
-
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 
@@ -32,3 +28,7 @@ int main(int argc, char* argv[]) {
 
 	return 0;
 }
+
+#define MINICORO_IMPL
+#define MCO_DEFAULT_STACK_SIZE 32768
+#include "minicoro.h"

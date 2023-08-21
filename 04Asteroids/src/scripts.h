@@ -102,7 +102,7 @@ static void spawn_enemies(mco_coro* co) {
 		e->health = 2000.0f;
 		e->max_health = 2000.0f;
 		e->sprite = &game->spr_invader;
-		mco_desc desc = mco_desc_init(invader_script4, 0);
+		mco_desc desc = mco_desc_init(invader_script2, 0);
 		mco_create(&e->co, &desc);
 	}
 }

@@ -6,7 +6,7 @@ static Bullet* boss_shoot(Enemy* e, float spd, float dir) {
 	b->vsp = e->vsp + lengthdir_y(spd, dir);
 
 	stop_sound(game->snd_boss_shoot);
-	play_sound(game->snd_boss_shoot, e->x, e->y);
+	play_sound(game->snd_shoot, e->x, e->y); // play_sound(game->snd_boss_shoot, e->x, e->y);
 
 	return b;
 }
@@ -19,7 +19,7 @@ static Bullet* _boss_shoot(Enemy* e, float spd, float dir) {
 	b->vsp = lengthdir_y(spd, dir);
 
 	stop_sound(game->snd_boss_shoot);
-	play_sound(game->snd_boss_shoot, e->x, e->y);
+	play_sound(game->snd_shoot, e->x, e->y); // play_sound(game->snd_boss_shoot, e->x, e->y);
 
 	return b;
 }

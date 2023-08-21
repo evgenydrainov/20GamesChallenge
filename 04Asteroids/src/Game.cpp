@@ -99,19 +99,24 @@ void Game::Init() {
 		printf("didn't open audio device\n");
 	}
 
-	snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");     chunk_names[0] = "ship_engine.wav";
-	snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");    chunk_names[1] = "player_shoot.wav";
-	snd_shoot        = Mix_LoadWAV("assets/shoot.wav");           chunk_names[2] = "shoot.wav";
-	snd_boss_shoot   = Mix_LoadWAV("assets/boss_shoot.wav");      chunk_names[3] = "boss_shoot.wav";
-	snd_hurt         = Mix_LoadWAV("assets/hurt.wav");            chunk_names[4] = "hurt.wav";
-	snd_explode      = Mix_LoadWAV("assets/explode.wav");         chunk_names[5] = "explode.wav";
-	snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");    chunk_names[6] = "boss_explode.wav";
-	snd_powerup      = Mix_LoadWAV("assets/powerup.wav");         chunk_names[7] = "powerup.wav";
+	{
+		int i = 0;
+		snd_ship_engine  = Mix_LoadWAV("assets/ship_engine.wav");     chunk_names[i++] = "ship_engine.wav";
+		snd_player_shoot = Mix_LoadWAV("assets/player_shoot.wav");    chunk_names[i++] = "player_shoot.wav";
+		snd_shoot        = Mix_LoadWAV("assets/shoot.wav");           chunk_names[i++] = "shoot.wav";
+		snd_boss_shoot   = Mix_LoadWAV("assets/boss_shoot.wav");      chunk_names[i++] = "boss_shoot.wav";
+		snd_hurt         = Mix_LoadWAV("assets/hurt.wav");            chunk_names[i++] = "hurt.wav";
+		snd_explode      = Mix_LoadWAV("assets/explode.wav");         chunk_names[i++] = "explode.wav";
+		snd_boss_explode = Mix_LoadWAV("assets/boss_explode.wav");    chunk_names[i++] = "boss_explode.wav";
+		snd_powerup      = Mix_LoadWAV("assets/powerup.wav");         chunk_names[i++] = "powerup.wav";
+	}
 
 	Mix_VolumeChunk(snd_ship_engine, (int)(0.5f * (float)MIX_MAX_VOLUME));
 	Mix_VolumeChunk(snd_boss_shoot,  (int)(0.5f * (float)MIX_MAX_VOLUME));
 
-	Mix_MasterVolume((int)(0.25f * (float)MIX_MAX_VOLUME));
+	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
+		Mix_Volume(i, (int)(0.25f * (float)MIX_MAX_VOLUME));
+	}
 
 	player.x = (float)MAP_W / 2.0f;
 	player.y = (float)MAP_H / 2.0f;
@@ -528,7 +533,7 @@ void Game::update(float delta) {
 					pb->vsp += lengthdir_y(spd, dir);
 
 					stop_sound(snd_player_shoot);
-					play_sound(snd_player_shoot, p->x, p->y);
+					play_sound(snd_shoot, p->x, p->y); // play_sound(snd_player_shoot, p->x, p->y);
 
 					return pb;
 				};
@@ -700,7 +705,7 @@ static bool enemy_get_hit(Enemy* e, float dmg, float split_dir) {
 
 	split_dir += game->random.range(-5.0f, 5.0f);
 
-	// play_sound(game->snd_hurt, e->x, e->y);
+	play_sound(game->snd_hurt, e->x, e->y);
 
 	if (e->health <= 0.0f) {
 		switch (e->type) {
@@ -1014,14 +1019,17 @@ void Game::draw(float delta) {
 
 	SDL_RenderCopy(renderer, game_texture, nullptr, nullptr);
 
-	int x = 0;
-	int y = 0;
-	// draw audio channels
 	{
 		int window_w;
 		int window_h;
 		SDL_GetWindowSize(window, &window_w, &window_h);
 		SDL_RenderSetLogicalSize(renderer, window_w, window_h);
+	}
+	
+	int x = 0;
+	int y = 0;
+	if (show_audio_channels) {
+		// draw audio channels
 
 		for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
 			const char* name = "";

@@ -19,7 +19,7 @@ static bool sound_playing(Mix_Chunk* chunk) {
 	return false;
 }
 
-static int play_sound(Mix_Chunk* chunk, float x, float y) {
+static int play_sound_3d(Mix_Chunk* chunk, float x, float y) {
 	float dist = INFINITY;
 	auto check_dist = [&dist](float x, float y) {
 		float center_x = game->camera_x + (float)GAME_W / 2.0f;
@@ -57,6 +57,8 @@ static int play_sound(Mix_Chunk* chunk, float x, float y) {
 	float right = pan / 0.5f;
 	if (right > 1.0f) right = 1.0f;
 
+	// stop_sound(chunk);
+
 	bool has_free = false;
 	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
 		if (!Mix_Playing(i)) {
@@ -70,11 +72,62 @@ static int play_sound(Mix_Chunk* chunk, float x, float y) {
 		Mix_AllocateChannels(channels + 1);
 	}
 
-	// stop_sound(chunk);
 	int channel = Mix_PlayChannel(-1, chunk, 0);
 
 	Mix_SetPanning(channel, (Uint8)(left * 255.0f), (Uint8)(right * 255.0f));
 	Mix_SetDistance(channel, (Uint8)((1.0f - volume) * 255.0f));
 
 	return channel;
+}
+
+static int play_sound_2d(Mix_Chunk* chunk, float x, float y) {
+	auto check_if_on_screen = [](float x, float y) {
+		x -= game->camera_x;
+		y -= game->camera_y;
+		return (-100.0f <= x && x < (float)GAME_W + 100.0f)
+			&& (-100.0f <= y && y < (float)GAME_H + 100.0f);
+	};
+
+	bool is_on_screen = false;
+	is_on_screen |= check_if_on_screen(x - MAP_W, y - MAP_H);
+	is_on_screen |= check_if_on_screen(x,         y - MAP_H);
+	is_on_screen |= check_if_on_screen(x + MAP_W, y - MAP_H);
+
+	is_on_screen |= check_if_on_screen(x - MAP_W, y);
+	is_on_screen |= check_if_on_screen(x,         y);
+	is_on_screen |= check_if_on_screen(x + MAP_W, y);
+
+	is_on_screen |= check_if_on_screen(x - MAP_W, y + MAP_H);
+	is_on_screen |= check_if_on_screen(x,         y + MAP_H);
+	is_on_screen |= check_if_on_screen(x + MAP_W, y + MAP_H);
+
+	if (!is_on_screen) {
+		return -1;
+	}
+
+	stop_sound(chunk);
+
+	bool has_free = false;
+	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
+		if (!Mix_Playing(i)) {
+			has_free = true;
+			break;
+		}
+	}
+
+	if (!has_free) {
+		return -1;
+	}
+
+	int channel = Mix_PlayChannel(-1, chunk, 0);
+
+	return channel;
+}
+
+static int play_sound(Mix_Chunk* chunk, float x, float y) {
+	if (game->audio_3d) {
+		return play_sound_3d(chunk, x, y);
+	} else {
+		return play_sound_2d(chunk, x, y);
+	}
 }
