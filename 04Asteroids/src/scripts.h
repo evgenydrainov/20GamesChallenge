@@ -5,7 +5,7 @@ static void wait(mco_coro* co, int t) {
 }
 
 static Bullet* shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
+	Bullet* b = world->CreateBullet();
 	b->x = e->x;
 	b->y = e->y;
 	b->hsp = e->hsp + lengthdir_x(spd, dir);
@@ -17,7 +17,7 @@ static Bullet* shoot(Enemy* e, float spd, float dir) {
 }
 
 static Bullet* _shoot(Enemy* e, float spd, float dir) {
-	Bullet* b = game->CreateBullet();
+	Bullet* b = world->CreateBullet();
 	b->x = e->x;
 	b->y = e->y;
 	b->hsp = lengthdir_x(spd, dir);
@@ -54,28 +54,28 @@ static void shoot_radial(mco_coro* co, int n, float dir_diff, const F& f) {
 
 static void spawn_enemies(mco_coro* co) {
 	auto spawn_ships = [](mco_coro* co, int i) {
-		float dir = game->random.range(0.0f, 360.0f);
-		float x = game->player.x - lengthdir_x(4000.0f, dir);
-		float y = game->player.y - lengthdir_y(4000.0f, dir);
+		float dir = world->random.range(0.0f, 360.0f);
+		float x = world->player.x - lengthdir_x(4000.0f, dir);
+		float y = world->player.y - lengthdir_y(4000.0f, dir);
 
 		while (i--) {
-			Enemy* e = game->CreateEnemy();
+			Enemy* e = world->CreateEnemy();
 			
 			e->x = x;
 			e->y = y;
-			e->max_spd = game->random.range(10.0f, 11.0f);
-			e->hsp = lengthdir_x(e->max_spd, game->player.dir);
-			e->vsp = lengthdir_y(e->max_spd, game->player.dir);
-			e->angle = game->player.dir;
+			e->max_spd = world->random.range(10.0f, 11.0f);
+			e->hsp = lengthdir_x(e->max_spd, world->player.dir);
+			e->vsp = lengthdir_y(e->max_spd, world->player.dir);
+			e->angle = world->player.dir;
 
 			e->type = 10;
 			e->sprite = &game->spr_player_ship;
 			mco_desc desc = mco_desc_init(enemy_ship, 0);
 			mco_create(&e->co, &desc);
-			e->acc = game->random.range(0.25f, 0.35f);
+			e->acc = world->random.range(0.25f, 0.35f);
 
-			x += game->random.range(-50.0f, 50.0f);
-			y += game->random.range(-50.0f, 50.0f);
+			x += world->random.range(-50.0f, 50.0f);
+			y += world->random.range(-50.0f, 50.0f);
 
 			wait(co, 30);
 		}
@@ -83,15 +83,15 @@ static void spawn_enemies(mco_coro* co) {
 
 	auto enemy_count = []() {
 		int result = 0;
-		for (int i = 0; i < game->enemy_count; i++) {
-			if (game->enemies[i].type >= 10) {
+		for (int i = 0; i < world->enemy_count; i++) {
+			if (world->enemies[i].type >= 10) {
 				result++;
 			}
 		}
 		return result;
 	};
 
-	// game->player.power = 50;
+	// world->player.power = 50;
 	// goto l_boss;
 
 	wait(co, 40 * 60);
@@ -116,11 +116,11 @@ static void spawn_enemies(mco_coro* co) {
 
 	l_boss:
 	{
-		float dir = game->random.range(0.0f, 360.0f);
-		float x = game->player.x - lengthdir_x(1500.0f, dir);
-		float y = game->player.y - lengthdir_y(1500.0f, dir);
+		float dir = world->random.range(0.0f, 360.0f);
+		float x = world->player.x - lengthdir_x(1500.0f, dir);
+		float y = world->player.y - lengthdir_y(1500.0f, dir);
 
-		Enemy* e = game->CreateEnemy();
+		Enemy* e = world->CreateEnemy();
 		e->x = x;
 		e->y = y;
 		e->radius = 25.0f;

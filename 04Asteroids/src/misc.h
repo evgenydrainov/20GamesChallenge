@@ -1,3 +1,5 @@
+#define ArrayLength(a) (sizeof(a) / sizeof(*a))
+
 static double GetTime() {
 	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
 }
@@ -26,8 +28,8 @@ static bool sound_playing(Mix_Chunk* chunk) {
 static int play_sound_3d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	float dist = INFINITY;
 	auto check_dist = [&dist](float x, float y) {
-		float center_x = game->camera_x + (float)GAME_W / 2.0f;
-		float center_y = game->camera_y + (float)GAME_H / 2.0f;
+		float center_x = world->camera_x + (float)GAME_W / 2.0f;
+		float center_y = world->camera_y + (float)GAME_H / 2.0f;
 		float dist1 = point_distance(center_x, center_y, x, y);
 		if (dist1 < dist) dist = dist1;
 	};
@@ -51,7 +53,7 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 		return -1;
 	}
 
-	float pan = (x - game->camera_x) / (float)GAME_W;
+	float pan = (x - world->camera_x) / (float)GAME_W;
 	if (pan < 0.0f) pan = 0.0f;
 	if (pan > 1.0f) pan = 1.0f;
 
@@ -123,8 +125,8 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 
 static int play_sound_2d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	auto check_if_on_screen = [](float x, float y) {
-		x -= game->camera_x;
-		y -= game->camera_y;
+		x -= world->camera_x;
+		y -= world->camera_y;
 		return (-100.0f <= x && x < (float)GAME_W + 100.0f)
 			&& (-100.0f <= y && y < (float)GAME_H + 100.0f);
 	};

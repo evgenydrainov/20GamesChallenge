@@ -9,7 +9,7 @@ cl^
  /IC:\vclib\SDL_image-release-2.6.3\include^
  /IC:\vclib\SDL_ttf-release-2.20.2\include^
  /IC:\vclib\SDL_mixer-release-2.6.3\include^
- ..\src\main.cpp ..\src\Game.cpp ..\src\Font.cpp ..\src\Sprite.cpp^
+ ..\src\main.cpp ..\src\Game.cpp ..\src\Font.cpp ..\src\Sprite.cpp ..\src\World.cpp^
  kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib^
  Winmm.lib Setupapi.lib Version.lib Imm32.lib^
  C:\vclib\SDL-release-2.26.4\VisualC\Win32\Debug\SDL2.lib^

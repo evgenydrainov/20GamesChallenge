@@ -2,7 +2,7 @@ static void invader_script2(mco_coro* co) {
 	float dir = 0.0f;
 	while (true) {
 		shoot_radial(co, 15, 360.0f / 15.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 6.5f, point_direction(self->x, self->y, game->player.x, game->player.y));
+			Bullet* b = _shoot(self, 6.5f, point_direction(self->x, self->y, world->player.x, world->player.y));
 			b->lifespan *= 2.0f;
 			return b;
 		});
@@ -22,13 +22,13 @@ static void invader_script2(mco_coro* co) {
 static void invader_script3(mco_coro* co) {
 	while (true) {
 		shoot_radial(co, 19, 360.0f / 19.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 4.0f, point_direction(self->x, self->y, game->player.x, game->player.y));
+			Bullet* b = _shoot(self, 4.0f, point_direction(self->x, self->y, world->player.x, world->player.y));
 			b->lifespan *= 2.0f;
 			return b;
 		});
 
 		shoot_radial(co, 21, 360.0f / 21.0f, [](mco_coro* co, int j) {
-			Bullet* b = _shoot(self, 6.0f, point_direction(self->x, self->y, game->player.x, game->player.y));
+			Bullet* b = _shoot(self, 6.0f, point_direction(self->x, self->y, world->player.x, world->player.y));
 			b->lifespan *= 2.0f;
 			return b;
 		});

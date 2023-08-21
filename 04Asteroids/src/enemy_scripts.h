@@ -1,5 +1,5 @@
 static void enemy_ship(mco_coro* co) {
-	wait(co, game->random.next() % (2 * 60));
+	wait(co, world->random.next() % (2 * 60));
 
 	while (true) {
 		for (int i = 5; i--;) {
