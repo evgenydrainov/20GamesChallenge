@@ -779,42 +779,43 @@ void World::draw(float delta) {
 		};
 
 		draw_bg(game->tex_bg, 5.0f);
-		draw_bg(game->tex_bg1, 4.0f);
-	}
 
-	// draw moon
-	{
-		auto draw = [this](float xoff, float yoff) {
-			int w;
-			int h;
-			SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
-			SDL_FRect dest = {
-				SDL_floorf(500.0f - (camera_x + xoff) / 5.0f),
-				SDL_floorf(500.0f - (camera_y + yoff) / 5.0f),
-				(float) w,
-				(float) h
+		// draw moon
+		{
+			auto draw_moon = [this](float xoff, float yoff) {
+				int w;
+				int h;
+				SDL_QueryTexture(game->tex_moon, nullptr, nullptr, &w, &h);
+				SDL_FRect dest = {
+					SDL_floorf(500.0f - (camera_x + xoff) / 5.0f),
+					SDL_floorf(500.0f - (camera_y + yoff) / 5.0f),
+					(float) w,
+					(float) h
+				};
+		
+				SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
+				SDL_Rect screen = {0, 0, GAME_W, GAME_H};
+				if (!SDL_HasIntersection(&idest, &screen)) {
+					return;
+				}
+		
+				SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
 			};
+		
+			draw_moon(-MAP_W, -MAP_H);
+			draw_moon( 0.0f,  -MAP_H);
+			draw_moon( MAP_W, -MAP_H);
+		
+			draw_moon(-MAP_W,  0.0f);
+			draw_moon( 0.0f,   0.0f);
+			draw_moon( MAP_W,  0.0f);
+		
+			draw_moon(-MAP_W,  MAP_H);
+			draw_moon( 0.0f,   MAP_H);
+			draw_moon( MAP_W,  MAP_H);
+		}
 
-			SDL_Rect idest = {(int)dest.x, (int)dest.y, (int)dest.w, (int)dest.h};
-			SDL_Rect screen = {0, 0, GAME_W, GAME_H};
-			if (!SDL_HasIntersection(&idest, &screen)) {
-				return;
-			}
-
-			SDL_RenderCopyF(game->renderer, game->tex_moon, nullptr, &dest);
-		};
-
-		draw(-MAP_W, -MAP_H);
-		draw( 0.0f,  -MAP_H);
-		draw( MAP_W, -MAP_H);
-
-		draw(-MAP_W,  0.0f);
-		draw( 0.0f,   0.0f);
-		draw( MAP_W,  0.0f);
-
-		draw(-MAP_W,  MAP_H);
-		draw( 0.0f,   MAP_H);
-		draw( MAP_W,  MAP_H);
+		draw_bg(game->tex_bg1, 4.0f);
 	}
 
 	// draw enemies
