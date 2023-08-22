@@ -68,7 +68,7 @@ static void spawn_enemies(mco_coro* co) {
 			e->vsp = lengthdir_y(e->max_spd, world->player.dir);
 			e->angle = world->player.dir;
 
-			e->type = 10;
+			e->type = TYPE_ENEMY;
 			e->sprite = &game->spr_player_ship;
 			mco_desc desc = mco_desc_init(enemy_ship, 0);
 			mco_create(&e->co, &desc);
@@ -84,7 +84,7 @@ static void spawn_enemies(mco_coro* co) {
 	auto enemy_count = []() {
 		int result = 0;
 		for (int i = 0; i < world->enemy_count; i++) {
-			if (world->enemies[i].type >= 10) {
+			if (world->enemies[i].type >= TYPE_ENEMY) {
 				result++;
 			}
 		}
@@ -124,7 +124,7 @@ static void spawn_enemies(mco_coro* co) {
 		e->x = x;
 		e->y = y;
 		e->radius = 25.0f;
-		e->type = 20;
+		e->type = TYPE_BOSS;
 		e->health = 2000.0f;
 		e->max_health = 2000.0f;
 		e->sprite = &game->spr_invader;

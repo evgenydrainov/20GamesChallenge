@@ -5,8 +5,6 @@
 #include "mathh.h"
 #include "misc.h"
 
-#include "scripts.h"
-
 #include <stdio.h>
 
 // #define PLAYER_ACC 0.3f
@@ -26,6 +24,13 @@
 
 #define INTERFACE_MAP_W 200
 #define INTERFACE_MAP_H 200
+
+enum {
+	TYPE_ENEMY = 1000,
+	TYPE_BOSS  = 2000
+};
+
+#include "scripts.h"
 
 static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type, float power = 1.0f) {
 	Enemy* e = world->CreateEnemy();
@@ -185,39 +190,42 @@ void World::update(float delta) {
 
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
-		if (e->type == 10) {
-			e->catch_up_timer -= delta;
-			if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
+		switch (e->type) {
+			case TYPE_ENEMY: {
+				e->catch_up_timer -= delta;
+				if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
 
-			float rel_x;
-			float rel_y;
-			float dist;
-			if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
-				if (dist > 800.0f && e->catch_up_timer == 0.0f) {
-					e->catch_up_timer = 5.0f * 60.0f;
-				}
+				float rel_x;
+				float rel_y;
+				float dist;
+				if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
+					if (dist > 800.0f && e->catch_up_timer == 0.0f) {
+						e->catch_up_timer = 5.0f * 60.0f;
+					}
 
-				float dir = point_direction(e->x, e->y, rel_x, rel_y);
-				if (dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
-					decelerate(e, 0.1f, delta);
+					float dir = point_direction(e->x, e->y, rel_x, rel_y);
+					if (dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
+						decelerate(e, 0.1f, delta);
 
-					// e->angle -= clamp(angle_difference(e->angle, dir), ) * delta;
-					e->angle = approach(e->angle, e->angle - angle_difference(e->angle, dir), 5.0f * delta);
-				} else {
-					if (SDL_fabsf(angle_difference(e->angle, dir)) > 20.0f) {
-						e->hsp += lengthdir_x(e->acc, dir) * delta;
-						e->vsp += lengthdir_y(e->acc, dir) * delta;
-						e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
+						// e->angle -= clamp(angle_difference(e->angle, dir), ) * delta;
+						e->angle = approach(e->angle, e->angle - angle_difference(e->angle, dir), 5.0f * delta);
 					} else {
-						e->hsp += lengthdir_x(e->acc, e->angle) * delta;
-						e->vsp += lengthdir_y(e->acc, e->angle) * delta;
-					}
-					
-					if (length(e->hsp, e->vsp) > e->max_spd) {
-						e->hsp = lengthdir_x(e->max_spd, e->angle);
-						e->vsp = lengthdir_y(e->max_spd, e->angle);
+						if (SDL_fabsf(angle_difference(e->angle, dir)) > 20.0f) {
+							e->hsp += lengthdir_x(e->acc, dir) * delta;
+							e->vsp += lengthdir_y(e->acc, dir) * delta;
+							e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
+						} else {
+							e->hsp += lengthdir_x(e->acc, e->angle) * delta;
+							e->vsp += lengthdir_y(e->acc, e->angle) * delta;
+						}
+						
+						if (length(e->hsp, e->vsp) > e->max_spd) {
+							e->hsp = lengthdir_x(e->max_spd, e->angle);
+							e->vsp = lengthdir_y(e->max_spd, e->angle);
+						}
 					}
 				}
+				break;
 			}
 		}
 
@@ -372,7 +380,7 @@ void World::update_player(float delta) {
 		if (Enemy* e = find_closest(enemies, enemy_count,
 									p->x, p->y,
 									&rel_x, &rel_y, &dist,
-									[](Enemy* e) { return !(1 <= e->type && e->type <= 3); })) {
+									[](Enemy* e) { return e->type >= TYPE_ENEMY; })) {
 			if (dist < 800.0f) {
 				constexpr float f = 1.0f - 0.05f;
 				float dir = point_direction(p->x, p->y, rel_x, rel_y);
@@ -494,8 +502,6 @@ void World::physics_update(float delta) {
 			for (int i = 0, c = enemy_count; i < c; i++) {
 				Enemy* e = &enemies[i];
 
-				// if (!(1 <= e->type && e->type <= 3)) continue;
-
 				if (circle_vs_circle(p->x, p->y, p->radius, e->x, e->y, e->radius)) {
 					player_get_hit(p, 10.0f);
 					
@@ -553,7 +559,7 @@ void World::physics_update(float delta) {
 			continue;
 		}
 
-		// if (1 <= e->type && e->type <= 3) {
+		// if (e->type < TYPE_ENEMY) {
 		// 	if (!collide_with_bullets(bullets, bullet_count, &Game::DestroyBullet)) {
 		// 		DestroyEnemy(enemy_idx);
 		// 		c--;
@@ -588,24 +594,24 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 
 	if (e->health <= 0.0f) {
 		switch (e->type) {
-			case 3: {
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 2, e->power / 2.0f);
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 2, e->power / 2.0f);
-				break;
-			}
 			case 2: {
 				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 1, e->power / 2.0f);
 				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->power / 2.0f);
 				break;
 			}
-			case 10: {
+			case 3: {
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 2, e->power / 2.0f);
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 2, e->power / 2.0f);
+				break;
+			}
+			case TYPE_ENEMY: {
 				screenshake_intensity = 5.0f;
 				screenshake_time = 10.0f;
 				screenshake_timer = 10.0f;
 				SDL_Delay(40);
 				break;
 			}
-			case 20: {
+			case TYPE_BOSS: {
 				screenshake_intensity = 10.0f;
 				screenshake_time = 30.0f;
 				screenshake_timer = 30.0f;
@@ -614,8 +620,8 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 			}
 		}
 
-		if (e->type == 20) play_sound(game->snd_boss_explode, e->x, e->y);
-		else play_sound(game->snd_explode, e->x, e->y);
+		Mix_Chunk* chunk = (e->type >= TYPE_BOSS) ? game->snd_boss_explode : game->snd_explode;
+		play_sound(chunk, e->x, e->y);
 
 		return false;
 	}
@@ -869,7 +875,7 @@ void World::draw_ui(float delta) {
 
 			for (int i = 0; i < enemy_count; i++) {
 				SDL_SetRenderDrawColor(game->renderer, 255, 0, 0, 255);
-				if (1 <= enemies[i].type && enemies[i].type <= 3) {
+				if (enemies[i].type < TYPE_ENEMY) {
 					SDL_RenderDrawPoint(game->renderer,
 										(int) (enemies[i].x / MAP_W * (float)INTERFACE_MAP_W),
 										(int) (enemies[i].y / MAP_H * (float)INTERFACE_MAP_H));
@@ -952,7 +958,7 @@ void World::draw_ui(float delta) {
 
 	// draw boss healthbar
 	for (int i = 0; i < enemy_count; i++) {
-		if (!(enemies[i].type == 20)) continue;
+		if (enemies[i].type < TYPE_BOSS) continue;
 
 		int w = 450;
 		int h = 18;

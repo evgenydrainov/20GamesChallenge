@@ -54,7 +54,7 @@ struct Enemy {
 	mco_coro* co;
 
 	union {
-		struct { // used by type 10
+		struct { // TYPE_ENEMY
 			float catch_up_timer;
 			float acc;
 			float max_spd;
