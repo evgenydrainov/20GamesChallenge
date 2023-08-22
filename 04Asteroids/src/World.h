@@ -81,17 +81,21 @@ struct World {
 	int bullet_count;
 	Bullet* p_bullets; // player bullets
 	int p_bullet_count;
+
 	float camera_x;
 	float camera_y;
 	float camera_base_x;
 	float camera_base_y;
 	float camera_scale = 1.0f;
+
 	unsigned int input;
 	unsigned int input_press;
 	unsigned int input_release;
+
 	mco_coro* co;
 	float time;
 	xoshiro256plusplus random;
+
 	float screenshake_intensity;
 	float screenshake_time;
 	float screenshake_timer;

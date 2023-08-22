@@ -114,7 +114,7 @@ static int play_sound_3d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	}
 
 	int channel = Mix_PlayChannel(-1, chunk, 0);
-	channel_when_played[channel] = GetTime();
+	channel_when_played[channel] = game->time * (1000.0f / 60.0f);
 	channel_priority[channel] = priority;
 
 	Mix_SetPanning(channel, (Uint8)(left * 255.0f), (Uint8)(right * 255.0f));
@@ -163,7 +163,7 @@ static int play_sound_2d(Mix_Chunk* chunk, float x, float y, int priority = 0) {
 	}
 
 	int channel = Mix_PlayChannel(-1, chunk, 0);
-	channel_when_played[channel] = GetTime();
+	channel_when_played[channel] = game->time * (1000.0f / 60.0f);
 	channel_priority[channel] = priority;
 
 	return channel;

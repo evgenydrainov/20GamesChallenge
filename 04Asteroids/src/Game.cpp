@@ -15,7 +15,7 @@
 
 Game* game;
 World* world;
-double channel_when_played[MY_MIX_CHANNELS];
+float channel_when_played[MY_MIX_CHANNELS];
 int channel_priority[MY_MIX_CHANNELS];
 static const char* chunk_names[ArrayLength(Game::chunks)];
 
@@ -193,7 +193,7 @@ void Game::Frame() {
 	t = GetTime();
 	double time_left = frame_end_time - t;
 	if (time_left > 0.0) {
-		SDL_Delay((Uint32)(time_left * 0.95 * 1000.0));
+		SDL_Delay((Uint32) (time_left * (0.95 * 1000.0)));
 		while (GetTime() < frame_end_time) {}
 	}
 #endif
@@ -206,6 +206,8 @@ void Game::update(float delta) {
 			break;
 		}
 	}
+
+	time += delta;
 }
 
 void Game::draw(float delta) {
@@ -259,7 +261,7 @@ void Game::draw(float delta) {
 				}
 			}
 			char buf[100];
-			SDL_snprintf(buf, sizeof(buf), "%d %.2f %d %s", i, channel_when_played[i], channel_priority[i], name);
+			SDL_snprintf(buf, sizeof(buf), "%d %.0f %d %s", i, channel_when_played[i], channel_priority[i], name);
 			// SDL_Color col = Mix_Playing(i) ? SDL_Color{128, 255, 128, 255} : SDL_Color{255, 128, 128, 255};
 			// SDL_Color col = Mix_Playing(i) ? SDL_Color{64, 255, 64, 255} : SDL_Color{255, 255, 255, 255};
 			SDL_Color col = Mix_Playing(i) ? SDL_Color{255, 255, 255, 255} : SDL_Color{128, 128, 128, 255};

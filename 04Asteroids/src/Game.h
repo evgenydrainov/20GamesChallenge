@@ -30,6 +30,7 @@ struct Game {
 
 	int state = STATE_PLAYING;
 	bool audio_3d = true;
+	float time;
 
 	SDL_Texture* tex_bg;
 	SDL_Texture* tex_bg1;
@@ -84,5 +85,5 @@ struct Game {
 
 extern Game* game;
 extern World* world;
-extern double channel_when_played[MY_MIX_CHANNELS];
+extern float channel_when_played[MY_MIX_CHANNELS];
 extern int channel_priority[MY_MIX_CHANNELS];
