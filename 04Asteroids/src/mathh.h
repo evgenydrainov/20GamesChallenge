@@ -1,6 +1,41 @@
-static float lerp(float a, float b, float f) {
+template <typename T>
+static T min(T a, T b) {
+	return (a < b) ? a : b;
+}
+
+template <typename T>
+static T max(T a, T b) {
+	return (a > b) ? a : b;
+}
+
+template <typename T>
+static T clamp(T x, T _min, T _max) {
+	return min(max(x, _min), _max);
+}
+
+template <typename T>
+static T lerp(T a, T b, T f) {
 	return a + (b - a) * f;
 }
+
+template <typename T>
+static T approach(T start, T end, T shift) {
+	if (end > start) {
+		start += shift;
+		if (start > end) start = end;
+	} else if (end < start) {
+		start -= shift;
+		if (start < end) start = end;
+	}
+	return start;
+}
+
+template <typename T>
+static T wrap(T a, T b) {
+	return (a % b + b) % b;
+}
+
+
 
 static float length(float x, float y) {
 	return SDL_sqrtf(x * x + y * y);
@@ -66,15 +101,4 @@ static float point_distance(float x1, float y1, float x2, float y2) {
 	float dx = x2 - x1;
 	float dy = y2 - y1;
 	return length(dx, dy);
-}
-
-static float approach(float start, float end, float shift) {
-	if (end > start) {
-		start += shift;
-		if (start > end) start = end;
-	} else if (end < start) {
-		start -= shift;
-		if (start < end) start = end;
-	}
-	return start;
 }

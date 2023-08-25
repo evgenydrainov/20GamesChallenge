@@ -40,10 +40,10 @@ void Game::Init() {
 								  SDL_RENDERER_ACCELERATED
 								  | SDL_RENDERER_TARGETTEXTURE);
 
-	// SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	game_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_TARGET, GAME_W, GAME_H);
-	SDL_SetTextureScaleMode(game_texture, SDL_ScaleModeLinear);
+	SDL_SetTextureScaleMode(game_texture, bilinear_filter ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
 
 	tex_bg   = IMG_LoadTexture(renderer, "assets/bg.png"); // https://deep-fold.itch.io/space-background-generator
 	tex_bg1  = IMG_LoadTexture(renderer, "assets/bg1.png");
@@ -82,9 +82,7 @@ void Game::Init() {
 	Mix_VolumeChunk(snd_ship_engine, (int)(0.5f * (float)MIX_MAX_VOLUME));
 	Mix_VolumeChunk(snd_boss_shoot,  (int)(0.5f * (float)MIX_MAX_VOLUME));
 
-	for (int i = 0; i < Mix_AllocateChannels(-1); i++) {
-		Mix_Volume(i, (int)(0.25f * (float)MIX_MAX_VOLUME));
-	}
+	Mix_Volume(-1, (int)(0.25f * (float)MIX_MAX_VOLUME));
 
 	// prev_time = GetTime() - (1.0 / (double)GAME_FPS);
 
@@ -93,6 +91,10 @@ void Game::Init() {
 
 	world = &world_instance;
 	world->Init();
+
+	// double t = GetTime();
+	// for (int i = 10'000; i--;) printf("printf 10k lines\n");
+	// printf("%fms", (GetTime() - t) * 1000.0);
 }
 
 void Game::Quit() {
@@ -139,6 +141,9 @@ void Game::Frame() {
 	double current_fps = 1.0 / (t - prev_time);
 	prev_time = t;
 
+	skip_frame = frame_advance;
+	SDL_memset(&key_pressed, 0, sizeof(key_pressed));
+
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -148,13 +153,21 @@ void Game::Frame() {
 			}
 
 			case SDL_KEYDOWN: {
-				switch (event.key.keysym.scancode) {
-					case SDL_SCANCODE_TAB: {
-						hide_interface ^= true;
+				int scancode = event.key.keysym.scancode;
+
+				if (0 <= scancode && scancode < ArrayLength(key_pressed)) {
+					key_pressed[scancode] = true;
+				}
+
+				switch (scancode) {
+					case SDL_SCANCODE_F5: {
+						frame_advance = true;
+						skip_frame = false;
 						break;
 					}
-					case SDL_SCANCODE_H: {
-						show_hitboxes ^= true;
+
+					case SDL_SCANCODE_F6: {
+						frame_advance = false;
 						break;
 					}
 				}
@@ -163,15 +176,17 @@ void Game::Frame() {
 		}
 	}
 
-	float delta = 1.0f;
+	float delta = 60.0f / float(GAME_FPS);
 
 	fps_sum += current_fps;
-	fps_timer += delta;
-	if (fps_timer >= 60.0f) {
+	fps_timer += 1.0f;
+	if (fps_timer >= float(GAME_FPS)) {
 		fps = fps_sum / fps_timer;
 		fps_timer = 0.0f;
 		fps_sum = 0.0f;
 	}
+
+	// fps = current_fps;
 
 	{
 		double t = GetTime();
@@ -235,7 +250,20 @@ void Game::draw(float delta) {
 	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 	SDL_RenderClear(renderer);
 
-	SDL_RenderCopy(renderer, game_texture, nullptr, nullptr);
+	if (letterbox) {
+		int window_w;
+		int window_h;
+		SDL_GetWindowSize(window, &window_w, &window_h);
+		float scale = min(float(window_w) / float(GAME_W), float(window_h) / float(GAME_H));
+		SDL_Rect dest;
+		dest.w = (int) (float(GAME_W) * scale);
+		dest.h = (int) (float(GAME_H) * scale);
+		dest.x = (window_w - dest.w) / 2;
+		dest.y = (window_h - dest.h) / 2;
+		SDL_RenderCopy(renderer, game_texture, nullptr, &dest);
+	} else {
+		SDL_RenderCopy(renderer, game_texture, nullptr, nullptr);
+	}
 
 	int x = 0;
 	int y = 200;

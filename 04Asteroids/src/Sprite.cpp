@@ -57,6 +57,13 @@ void DrawSprite(Sprite* sprite, int frame_index,
 void LoadSprite(Sprite* sprite, SpriteGroup* group, const char* fname,
 				int frame_count, int frames_in_row, float anim_spd, int loop_frame,
 				int xorigin, int yorigin) {
+	sprite->frame_count = frame_count;
+	sprite->frames_in_row = frames_in_row;
+	sprite->anim_spd = anim_spd;
+	sprite->loop_frame = loop_frame;
+
+	sprite->group = group;
+
 	SDL_Surface* surf = IMG_Load(fname);
 
 	if (group->u + surf->w >= SPRITE_GROUP_ATLAS_W) {
@@ -66,6 +73,7 @@ void LoadSprite(Sprite* sprite, SpriteGroup* group, const char* fname,
 
 		if (group->v + surf->h >= SPRITE_GROUP_ATLAS_H) {
 			if (group->atlas_count == SPRITE_GROUP_MAX_TEXTURES) {
+				SDL_Log("no room for sprite \"%s\"", fname);
 				SDL_FreeSurface(surf);
 				return;
 			}
@@ -89,12 +97,7 @@ void LoadSprite(Sprite* sprite, SpriteGroup* group, const char* fname,
 	sprite->height = surf->h / ((frame_count + frames_in_row - 1) / frames_in_row); // ceil
 	sprite->xorigin = (xorigin == INT_MAX) ? (sprite->width  / 2) : xorigin;
 	sprite->yorigin = (yorigin == INT_MAX) ? (sprite->height / 2) : yorigin;
-	sprite->frame_count = frame_count;
-	sprite->frames_in_row = frames_in_row;
-	sprite->anim_spd = anim_spd;
-	sprite->loop_frame = loop_frame;
-
-	sprite->group = group;
+	
 	sprite->group_index = group->atlas_count - 1;
 
 	group->u += surf->w;

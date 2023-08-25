@@ -25,6 +25,8 @@
 #define INTERFACE_MAP_W 200
 #define INTERFACE_MAP_H 200
 
+#define PAUSE_MENU_LEN 6
+
 enum {
 	TYPE_ENEMY = 1000,
 	TYPE_BOSS  = 2000
@@ -186,6 +188,51 @@ void World::update(float delta) {
 		input_release =  prev & ~input;
 	}
 
+	if (paused) {
+		if (input_press & INPUT_UP)   {pause_menu.cursor--; pause_menu.cursor = wrap(pause_menu.cursor, PAUSE_MENU_LEN);}
+		if (input_press & INPUT_DOWN) {pause_menu.cursor++; pause_menu.cursor = wrap(pause_menu.cursor, PAUSE_MENU_LEN);}
+
+		if (input_press & INPUT_FIRE) {
+			switch (pause_menu.cursor) {
+				case 0: {
+					game->audio_3d ^= true;
+					// @Hack
+					int vol = Mix_Volume(0, -1);
+					Mix_AllocateChannels(0);
+					Mix_AllocateChannels(MY_MIX_CHANNELS);
+					Mix_Volume(-1, vol);
+					SDL_memset(channel_when_played, 0, sizeof(channel_when_played));
+					SDL_memset(channel_priority, 0, sizeof(channel_priority));
+					break;
+				}
+				case 1: game->show_debug_info     ^= true; break;
+				case 2: game->show_audio_channels ^= true; break;
+				case 4: game->letterbox           ^= true; break;
+				case 5: {
+					game->bilinear_filter ^= true;
+					SDL_SetTextureScaleMode(game->game_texture, game->bilinear_filter ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+					break;
+				}
+			}
+		}
+
+		switch (pause_menu.cursor) {
+			case 3: {
+				if (input_press & INPUT_LEFT) {
+					int vol = Mix_Volume(0, -1);
+					Mix_Volume(-1, max(vol - 8, 0));
+				}
+				if (input_press & INPUT_RIGHT) {
+					int vol = Mix_Volume(0, -1);
+					Mix_Volume(-1, min(vol + 8, MIX_MAX_VOLUME));
+				}
+				break;
+			}
+		}
+
+		goto l_skip_update;
+	}
+
 	update_player(delta);
 
 	for (int i = 0; i < enemy_count; i++) {
@@ -304,8 +351,8 @@ void World::update(float delta) {
 			target_x += lengthdir_x(100.0f, p->dir);
 			target_y += lengthdir_y(100.0f, p->dir);
 
-			camera_base_x += p->hsp;
-			camera_base_y += p->vsp;
+			camera_base_x += p->hsp * delta;
+			camera_base_y += p->vsp * delta;
 
 			camera_base_x = lerp(camera_base_x, target_x, 1.0f - SDL_powf(f, delta));
 			camera_base_y = lerp(camera_base_y, target_y, 1.0f - SDL_powf(f, delta));
@@ -344,21 +391,40 @@ void World::update(float delta) {
 		}
 	}
 
-	if (mco_status(co) != MCO_DEAD) {
-		mco_resume(co);
-	}
+	coro_timer += delta;
+	while (coro_timer >= 1.0f) {
+		if (mco_status(co) != MCO_DEAD) {
+			mco_resume(co);
+		}
 
-	for (int i = 0; i < enemy_count; i++) {
-		Enemy* e = &enemies[i];
-		if (e->co) {
-			if (mco_status(e->co) != MCO_DEAD) {
-				e->co->user_data = e;
-				mco_resume(e->co);
+		for (int i = 0; i < enemy_count; i++) {
+			Enemy* e = &enemies[i];
+			if (e->co) {
+				if (mco_status(e->co) != MCO_DEAD) {
+					e->co->user_data = e;
+					mco_resume(e->co);
+				}
 			}
 		}
+
+		coro_timer -= 1.0f;
+	}
+
+	if (game->key_pressed[SDL_SCANCODE_TAB]) {
+		hide_interface ^= true;
+	}
+	if (game->key_pressed[SDL_SCANCODE_H]) {
+		show_hitboxes ^= true;
 	}
 
 	time += delta;
+
+	l_skip_update:
+
+	if (game->key_pressed[SDL_SCANCODE_ESCAPE]) {
+		paused ^= true;
+		if (paused) pause_menu = {};
+	}
 }
 
 void World::update_player(float delta) {
@@ -404,8 +470,7 @@ void World::update_player(float delta) {
 			p->hsp += PLAYER_ACC *  SDL_cosf(rad) * delta;
 			p->vsp += PLAYER_ACC * -SDL_sinf(rad) * delta;
 
-			if ((int)time % 5 == 0) {
-				stop_sound(game->snd_ship_engine);
+			if (!sound_playing(game->snd_ship_engine)) {
 				play_sound(game->snd_ship_engine, p->x, p->y);
 			}
 		} else {
@@ -827,7 +892,7 @@ void World::draw(float delta) {
 	// draw enemies
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
-		if (game->show_hitboxes) DrawCircleCam(e->x, e->y, e->radius, {255, 0, 0, 255});
+		if (show_hitboxes) DrawCircleCam(e->x, e->y, e->radius, {255, 0, 0, 255});
 		DrawSpriteCamWarped(e->sprite, e->frame_index, e->x, e->y, e->angle);
 	}
 
@@ -838,7 +903,7 @@ void World::draw(float delta) {
 			if (((int)time / 4) % 2) col.a = 64;
 			else col.a = 192;
 		}
-		if (game->show_hitboxes) DrawCircleCam(player.x, player.y, player.radius, {128, 255, 128, 255});
+		if (show_hitboxes) DrawCircleCam(player.x, player.y, player.radius, {128, 255, 128, 255});
 		DrawSpriteCamWarped(&game->spr_player_ship, 0.0f, player.x, player.y, player.dir, 1.0f, 1.0f, col);
 	}
 
@@ -852,10 +917,34 @@ void World::draw(float delta) {
 		DrawCircleCam(pb->x, pb->y, pb->radius);
 	}
 
-	if (!game->hide_interface) {
+	if (!hide_interface) {
 		draw_ui(delta);
 	} else {
 		interface_update_timer = 0.0f;
+	}
+
+	if (paused) {
+		SDL_SetRenderDrawColor(game->renderer, 0, 0, 0, 128);
+		SDL_RenderFillRect(game->renderer, nullptr);
+
+		char label4[20];
+		SDL_snprintf(label4, sizeof(label4), "SOUND VOLUME: %d", Mix_Volume(0, -1));
+
+		const char* label[PAUSE_MENU_LEN] = {
+			game->audio_3d            ? "3D AUDIO (experimental): on" : "3D AUDIO (experimental): off",
+			game->show_debug_info     ? "SHOW DEBUG INFO: on"         : "SHOW DEBUG INFO: off",
+			game->show_audio_channels ? "SHOW AUDIO CHANNELS: on"     : "SHOW AUDIO CHANNELS: off",
+			label4,
+			game->letterbox           ? "LETTERBOX: on"               : "LETTERBOX: off",
+			game->bilinear_filter     ? "BILINEAR FILTERING: on"      : "BILINEAR FILTERING: off"
+		};
+
+		for (int i = 0; i < PAUSE_MENU_LEN; i++) {
+			int x = GAME_W / 2;
+			int y = 100 + 22 * i;
+			SDL_Color col = (i == pause_menu.cursor) ? SDL_Color{255, 255, 0, 255} : SDL_Color{255, 255, 255, 255};
+			DrawText(&game->fnt_mincho, label[i], x, y, HALIGN_CENTER, 0, col);
+		}
 	}
 }
 

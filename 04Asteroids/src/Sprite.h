@@ -8,7 +8,7 @@
 
 #include <limits.h>
 
-#define SPRITE_GROUP_MAX_TEXTURES 10
+#define SPRITE_GROUP_MAX_TEXTURES 2
 
 struct SpriteGroup {
 	union {

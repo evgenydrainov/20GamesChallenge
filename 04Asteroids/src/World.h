@@ -95,6 +95,7 @@ struct World {
 	mco_coro* co;
 	float time;
 	xoshiro256plusplus random;
+	bool paused;
 
 	float screenshake_intensity;
 	float screenshake_time;
@@ -104,6 +105,14 @@ struct World {
 	float interface_x;
 	float interface_y;
 	SDL_Texture* interface_map_texture;
+
+	bool hide_interface;
+	bool show_hitboxes;
+	float coro_timer;
+
+	struct {
+		int cursor;
+	} pause_menu;
 
 	void Init();
 	void Quit();

@@ -28,9 +28,11 @@ struct Game {
 		World world_instance;
 	};
 
-	int state = STATE_PLAYING;
-	bool audio_3d = true;
+	int state;
 	float time;
+	bool audio_3d;
+	bool letterbox = true;
+	bool bilinear_filter = true;
 
 	SDL_Texture* tex_bg;
 	SDL_Texture* tex_bg1;
@@ -68,11 +70,11 @@ struct Game {
 	double fps_sum;
 	double fps_timer;
 	double fps;
-	bool hide_interface;
-	bool show_hitboxes;
-	bool show_audio_channels = true;
-	bool show_debug_info = true;
+	bool show_audio_channels;
+	bool show_debug_info;
 	double update_took, draw_took;
+	bool skip_frame, frame_advance;
+	bool key_pressed[SDL_SCANCODE_UP + 1];
 
 	void Init();
 	void Quit();

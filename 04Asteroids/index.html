@@ -8,11 +8,16 @@
 
 <body>
 <center>
-    <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <canvas id="canvas" oncontextmenu="event.preventDefault()" onclick='refocus_myself()'></canvas>
     <script type='text/javascript'>
         var Module = {
             canvas: (function() { return document.getElementById('canvas'); })()
         };
+		function refocus_myself() {
+			var mycanvas=document.getElementById('canvas');
+			mycanvas.setAttribute('tabindex','0');
+			mycanvas.focus();
+		}
     </script>
     <script src="index.js"></script>
 </center>
