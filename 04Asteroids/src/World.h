@@ -58,6 +58,8 @@ struct Enemy {
 			float catch_up_timer;
 			float acc;
 			float max_spd;
+			bool stop_when_close_to_player;
+			bool not_exact_player_dir;
 		};
 	};
 };

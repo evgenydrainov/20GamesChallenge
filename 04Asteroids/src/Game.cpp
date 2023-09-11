@@ -274,7 +274,19 @@ void Game::draw(float delta) {
 					 "draw: %.2fms",
 					 update_took,
 					 draw_took);
-		y = DrawText(&fnt_mincho, buf, x, y).y + fnt_mincho.height + 10;
+		y = DrawText(&fnt_mincho, buf, x, y).y + fnt_mincho.height;
+		if (state == STATE_PLAYING) {
+			char buf[100];
+			SDL_snprintf(buf, sizeof(buf),
+						 "enemies: %d\n"
+						 "bullets: %d\n"
+						 "player bullets: %d\n",
+						 world->enemy_count,
+						 world->bullet_count,
+						 world->p_bullet_count);
+			y = DrawText(&fnt_mincho, buf, x, y).y + fnt_mincho.height;
+		}
+		y += 10;
 	}
 	if (show_audio_channels) {
 		// draw audio channels

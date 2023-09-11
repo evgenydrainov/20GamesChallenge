@@ -251,13 +251,13 @@ void World::update(float delta) {
 					}
 
 					float dir = point_direction(e->x, e->y, rel_x, rel_y);
-					if (dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
+					if (e->stop_when_close_to_player && dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
 						decelerate(e, 0.1f, delta);
 
 						// e->angle -= clamp(angle_difference(e->angle, dir), ) * delta;
 						e->angle = approach(e->angle, e->angle - angle_difference(e->angle, dir), 5.0f * delta);
 					} else {
-						if (SDL_fabsf(angle_difference(e->angle, dir)) > 20.0f) {
+						if (!e->not_exact_player_dir || SDL_fabsf(angle_difference(e->angle, dir)) > 20.0f) {
 							e->hsp += lengthdir_x(e->acc, dir) * delta;
 							e->vsp += lengthdir_y(e->acc, dir) * delta;
 							e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);

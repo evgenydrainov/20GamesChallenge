@@ -73,6 +73,8 @@ static void spawn_enemies(mco_coro* co) {
 			mco_desc desc = mco_desc_init(enemy_ship, 0);
 			mco_create(&e->co, &desc);
 			e->acc = world->random.range(0.25f, 0.35f);
+			e->stop_when_close_to_player = world->random.range(0.0f, 1.0f) > 0.5f;
+			e->not_exact_player_dir = world->random.range(0.0f, 1.0f) > 0.5f;
 
 			x += world->random.range(-50.0f, 50.0f);
 			y += world->random.range(-50.0f, 50.0f);
