@@ -1,4 +1,5 @@
 @echo off
+mkdir out
 g++ -o out/main.exe src/*.cpp^
  -IC:\vclib\SDL2-2.28.3\i686-w64-mingw32\include\SDL2^
  -IC:\vclib\SDL2_image-2.6.3\i686-w64-mingw32\include\SDL2^
