@@ -23,7 +23,7 @@ static const char* chunk_names[ArrayLength(Game::chunks)];
 void Game::Init() {
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
-	SDL_Init(SDL_INIT_VIDEO);
+	SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
 	IMG_Init(IMG_INIT_PNG);
 	TTF_Init();
 	Mix_Init(MIX_INIT_OGG);
