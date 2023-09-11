@@ -25,7 +25,7 @@ enum {
 
 struct Game {
 	union {
-		World world_instance;
+		World world_instance{};
 	};
 
 	int state;

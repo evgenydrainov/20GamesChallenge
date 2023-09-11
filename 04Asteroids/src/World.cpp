@@ -3,6 +3,7 @@
 #include "Game.h"
 
 #include "mathh.h"
+#include <math.h>
 #include "misc.h"
 
 #include <stdio.h>

@@ -36,18 +36,18 @@ void DrawSprite(Sprite* sprite, int frame_index,
 	src.h = sprite->height;
 
 	SDL_FRect dest;
-	dest.x = (x - (float)sprite->xorigin * fabsf(xscale));
-	dest.y = (y - (float)sprite->yorigin * fabsf(yscale));
-	dest.w = ((float)sprite->width  * fabsf(xscale));
-	dest.h = ((float)sprite->height * fabsf(yscale));
+	dest.x = (x - (float)sprite->xorigin * SDL_fabsf(xscale));
+	dest.y = (y - (float)sprite->yorigin * SDL_fabsf(yscale));
+	dest.w = ((float)sprite->width  * SDL_fabsf(xscale));
+	dest.h = ((float)sprite->height * SDL_fabsf(yscale));
 
 	int flip = SDL_FLIP_NONE;
 	if (xscale < 0.0f) flip |= SDL_FLIP_HORIZONTAL;
 	if (yscale < 0.0f) flip |= SDL_FLIP_VERTICAL;
 
 	SDL_FPoint center;
-	center.x = ((float)sprite->xorigin * fabsf(xscale));
-	center.y = ((float)sprite->yorigin * fabsf(yscale));
+	center.x = ((float)sprite->xorigin * SDL_fabsf(xscale));
+	center.y = ((float)sprite->yorigin * SDL_fabsf(yscale));
 
 	SDL_SetTextureColorMod(sprite->texture, color.r, color.g, color.b);
 	SDL_SetTextureAlphaMod(sprite->texture, color.a);
