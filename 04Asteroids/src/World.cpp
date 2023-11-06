@@ -167,7 +167,7 @@ static void decelerate(Obj* o, float dec, float delta) {
 		o->hsp = 0.0f;
 		o->vsp = 0.0f;
 	}
-};
+}
 
 void World::update(float delta) {
 	// input

@@ -99,7 +99,9 @@ void Game::Init() {
 }
 
 void Game::Quit() {
-	world->Quit();
+	switch (state) {
+		case STATE_PLAYING: world->Quit(); break;
+	}
 
 	Mix_FreeChunk(snd_powerup);
 	Mix_FreeChunk(snd_boss_explode);
