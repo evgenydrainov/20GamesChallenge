@@ -570,6 +570,7 @@ void World::Update(float delta) {
 						shoot(20.0f, p->dir + 4.0f);
 						break;
 					}
+					default:
 					case 2: {
 						shoot(20.0f, p->dir,  10.0f);
 						shoot(20.0f, p->dir, -10.0f);
