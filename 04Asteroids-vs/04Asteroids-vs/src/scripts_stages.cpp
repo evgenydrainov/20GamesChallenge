@@ -21,7 +21,7 @@ static Enemy* _create_enemy(float x, float y, float dir,
 	mco_create(&e->co, &desc);
 	e->acc = acc;
 
-	e->experience = 2.5f;
+	e->experience = 5.0f;
 	e->money = 5.0f;
 
 	return e;
