@@ -1310,7 +1310,7 @@ void World::Draw(float delta) {
 		SDL_Color col = {255, 255, 255, 255};
 		if (c->opened) col.a = 128;
 
-		c->frame_index = 2 * c->type + c->opened;
+		c->frame_index = float(2 * c->type + c->opened);
 		draw_object(c, 0.0f, 1.0f, 1.0f, col);
 
 		if (c->opened) continue;
