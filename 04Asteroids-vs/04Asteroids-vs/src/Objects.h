@@ -40,6 +40,11 @@ enum struct BulletType {
 	LAZER
 };
 
+enum {
+	CHEST_ITEM,
+	CHEST_ACTIVE_ITEM
+};
+
 struct Object {
 	ObjType object_type;
 	instance_id id;
@@ -130,5 +135,12 @@ struct Ally : Object {
 
 struct Chest : Object {
 	int type;
+	float radius = 30.0f;
+	float cost;
+	bool opened;
 
+	union {
+		u8 item;      // CHEST_ITEM
+		u8 active_item; // CHEST_ACTIVE_ITEM
+	};
 };

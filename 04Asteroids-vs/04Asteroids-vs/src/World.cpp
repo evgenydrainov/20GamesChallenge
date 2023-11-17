@@ -114,7 +114,17 @@ void World::Init() {
 			c->x = x;
 			c->y = y;
 			c->sprite = spr_chest;
+
+			if (i == 0) {
+				c->type = CHEST_ACTIVE_ITEM;
+				c->active_item = ACTIVE_ITEM_HEAL;
+				c->cost = 50.0f;
+			} else {
+				c->type = CHEST_ITEM;
+				c->item = ITEM_MISSILES;
+				c->cost = 50.0f;
 		}
+	}
 	}
 
 	{
@@ -796,6 +806,26 @@ void World::UpdatePlayer(Player* p, float delta) {
 	}
 
 	p->active_item_cooldown = max(p->active_item_cooldown - delta, 0.0f);
+
+	// open chests
+	for (int i = 0; i < chest_count; i++) {
+		Chest* c = &chests[i];
+
+		if (c->opened) continue;
+
+		if (circle_vs_circle_wrapped(p->x, p->y, p->radius, c->x, c->y, c->radius)) {
+			if (input_press & INPUT_FIRE) {
+				if (p->money >= c->cost) {
+					switch (c->type) {
+						case CHEST_ITEM: p->items[c->item]++; break;
+						case CHEST_ACTIVE_ITEM: p->active_item = c->active_item; break;
+}
+					p->money -= c->cost;
+					c->opened = true;
+				}
+			}
+		}
+	}
 }
 
 void World::PhysicsUpdate(float delta) {
@@ -1276,7 +1306,24 @@ void World::Draw(float delta) {
 	// draw chests
 	for (int i = 0; i < chest_count; i++) {
 		Chest* c = &chests[i];
-		draw_object(c);
+
+		SDL_Color col = {255, 255, 255, 255};
+		if (c->opened) col.a = 128;
+
+		c->frame_index = 2 * c->type + c->opened;
+		draw_object(c, 0.0f, 1.0f, 1.0f, col);
+
+		if (c->opened) continue;
+
+		Player* p = &player;
+		if (circle_vs_circle_wrapped(p->x, p->y, p->radius, c->x, c->y, c->radius)) {
+			char buf[32];
+			stb_snprintf(buf, sizeof buf, "[Z] Open Chest - $%.0f", c->cost);
+			DrawTextShadow(renderer, fnt_cp437, buf,
+						   int(c->x - camera_left),
+						   int(c->y - camera_top) + 50,
+						   HALIGN_CENTER, VALIGN_MIDDLE);
+		}
 	}
 
 	// Draw enemies.

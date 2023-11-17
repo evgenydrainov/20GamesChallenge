@@ -14,7 +14,7 @@ Sprite Sprites[SPRITE_COUNT] = {
 	/* spr_invader      */ { nullptr,  0,  0,  56,   56,   28,  28,  2,  2,  1.0f / 40.0f,  0 },
 	/* spr_active_item  */ { nullptr,  0,  0,  50,   50,   0,   0,   2,  2,  0.0f,          0 },
 	/* spr_missile      */ { nullptr,  0,  0,  20,   20,   10,  10,  1,  1,  0.0f,          0 },
-	/* spr_chest        */ { nullptr,  0,  0,  50,   50,   25,  25,  2,  2,  0.0f,          0 }
+	/* spr_chest        */ { nullptr,  0,  0,  50,   50,   25,  25,  4,  4,  0.0f,          0 }
 };
 
 static const char* sprite_file_path[SPRITE_COUNT] = {
