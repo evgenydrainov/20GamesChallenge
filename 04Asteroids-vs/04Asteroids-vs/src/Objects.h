@@ -41,7 +41,7 @@ enum struct BulletType {
 };
 
 struct Object {
-	ObjType type;
+	ObjType object_type;
 	instance_id id;
 	u32 flags;
 
@@ -79,7 +79,7 @@ struct Player : Object {
 
 struct Enemy : Object {
 	float radius = 15.0f;
-	int enemy_type;
+	int type;
 	float health = 50.0f;
 	float max_health = 50.0f;
 	float experience;
@@ -108,7 +108,7 @@ struct Enemy : Object {
 };
 
 struct Bullet : Object {
-	BulletType bullet_type;
+	BulletType type;
 	float radius = 5.0f;
 	float dmg = 10.0f;
 	float lifespan = 1.5f * 60.0f;
@@ -124,10 +124,11 @@ struct Bullet : Object {
 };
 
 struct Ally : Object {
-	int ally_type;
+	int type;
 
 };
 
 struct Chest : Object {
-	
+	int type;
+
 };

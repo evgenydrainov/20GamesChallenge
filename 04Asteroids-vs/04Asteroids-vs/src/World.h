@@ -126,7 +126,7 @@ struct World {
 	int get_enemy_count() {
 		int result = 0;
 		for (int i = 0; i < enemy_count; i++) {
-			if (enemies[i].enemy_type >= TYPE_ENEMY) {
+			if (enemies[i].type >= TYPE_ENEMY) {
 				result++;
 			}
 		}

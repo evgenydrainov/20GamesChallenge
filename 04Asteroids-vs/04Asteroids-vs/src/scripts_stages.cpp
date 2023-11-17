@@ -15,7 +15,7 @@ static Enemy* _create_enemy(float x, float y, float dir,
 	e->vsp = lengthdir_y(e->max_spd, dir);
 	e->angle = dir;
 
-	e->enemy_type = type;
+	e->type = type;
 	e->sprite = sprite;
 	mco_desc desc = mco_desc_init(func, 0);
 	mco_create(&e->co, &desc);
@@ -82,7 +82,7 @@ static Enemy* create_boss(float x, float y) {
 	e->x = x;
 	e->y = y;
 	e->radius = 25.0f;
-	e->enemy_type = TYPE_BOSS;
+	e->type = TYPE_BOSS;
 	e->health = 2000.0f;
 	e->max_health = 2000.0f;
 	e->sprite = spr_invader;

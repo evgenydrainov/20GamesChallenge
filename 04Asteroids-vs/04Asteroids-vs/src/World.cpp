@@ -31,7 +31,7 @@ enum {
 
 World* world;
 
-static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int enemy_type,
+static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type,
 							float experience = 0.5f,
 							float money = 0.5f) {
 	Enemy* e = world->CreateEnemy();
@@ -43,17 +43,15 @@ static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int enemy_ty
 	e->money = money;
 	e->health = 1.0f;
 	e->max_health = 1.0f;
-	if (enemy_type == 3) {
+	e->type = type;
+	if (e->type == 3) {
 		e->radius = ASTEROID_RADIUS_3;
-		e->enemy_type = 3;
 		e->sprite = spr_asteroid3;
-	} else if (enemy_type == 2) {
+	} else if (e->type == 2) {
 		e->radius = ASTEROID_RADIUS_2;
-		e->enemy_type = 2;
 		e->sprite = spr_asteroid2;
-	} else if (enemy_type == 1) {
+	} else if (e->type == 1) {
 		e->radius = ASTEROID_RADIUS_1;
-		e->enemy_type = 1;
 		e->sprite = spr_asteroid1;
 	}
 	return e;
@@ -62,7 +60,7 @@ static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int enemy_ty
 void World::Init() {
 	Player* p = &player;
 
-	p->type = ObjType::PLAYER;
+	p->object_type = ObjType::PLAYER;
 	p->id = next_id++;
 	p->x = MAP_W / 2.0f;
 	p->y = MAP_H / 2.0f;
@@ -275,7 +273,7 @@ static void p_bullet_find_target(Bullet* b,
 							   b->x, b->y,
 							   &target_x, &target_y,
 							   &target_dist,
-							   [](Enemy* e) { return e->enemy_type >= TYPE_BOSS; });
+							   [](Enemy* e) { return e->type >= TYPE_BOSS; });
 
 	if (boss && target_dist < DIST_OFFSCREEN) found = true;
 
@@ -285,7 +283,7 @@ static void p_bullet_find_target(Bullet* b,
 									b->x, b->y,
 									&target_x, &target_y,
 									&target_dist,
-									[](Enemy* e) { return TYPE_ENEMY <= e->enemy_type && e->enemy_type < TYPE_BOSS; });
+									[](Enemy* e) { return TYPE_ENEMY <= e->type && e->type < TYPE_BOSS; });
 
 		if (enemy && target_dist < DIST_OFFSCREEN) found = true;
 	}
@@ -296,7 +294,7 @@ static void p_bullet_find_target(Bullet* b,
 									   b->x, b->y,
 									   &target_x, &target_y,
 									   &target_dist,
-									   [](Enemy* e) { return e->enemy_type < TYPE_BOSS; });
+									   [](Enemy* e) { return e->type < TYPE_BOSS; });
 
 		if (asteroid && target_dist < DIST_OFFSCREEN) found = true;
 	}
@@ -312,7 +310,7 @@ static void p_bullet_find_target(Bullet* b,
 static void update_bullet(Bullet* b,
 						  float delta,
 						  void (*find_target)(Bullet*, float*, float*, float*, bool*)) {
-	switch (b->bullet_type) {
+	switch (b->type) {
 		case BulletType::HOMING: {
 			float target_x;
 			float target_y;
@@ -458,7 +456,7 @@ void World::Update(float delta) {
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
 
-		if (TYPE_ENEMY <= e->enemy_type && e->enemy_type < TYPE_BOSS) {
+		if (TYPE_ENEMY <= e->type && e->type < TYPE_BOSS) {
 			e->catch_up_timer -= delta;
 			if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
 
@@ -535,7 +533,7 @@ void World::Update(float delta) {
 					pb->x = p->x;
 					pb->y = p->y;
 					pb->dmg = 30.0f;
-					pb->bullet_type = BulletType::HOMING;
+					pb->type = BulletType::HOMING;
 					pb->sprite = spr_missile;
 					pb->lifespan = 10.0f * 60.0f;
 					pb->dir = p->dir;
@@ -721,7 +719,7 @@ void World::UpdatePlayer(Player* p, float delta) {
 		if (Enemy* e = find_closest(enemies, enemy_count,
 									p->x, p->y,
 									&rel_x, &rel_y, &dist,
-									[](Enemy* e) { return e->enemy_type >= TYPE_ENEMY; })) {
+									[](Enemy* e) { return e->type >= TYPE_ENEMY; })) {
 			if (dist < 800.0f) {
 				const float f = 1.0f - 0.05f;
 				float dir = point_direction(p->x, p->y, rel_x, rel_y);
@@ -932,7 +930,7 @@ void World::PhysicsUpdate(float delta) {
 			continue;
 		}
 
-		// if (e->enemy_type < TYPE_ENEMY) {
+		// if (e->type < TYPE_ENEMY) {
 		// 	if (!collide_with_bullets(bullets, bullet_count, &Game::DestroyBullet)) {
 		// 		DestroyEnemyByIndex(enemy_idx);
 		// 		c--;
@@ -969,7 +967,7 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 	}
 
 	if (e->health <= 0.0f) {
-		switch (e->enemy_type) {
+		switch (e->type) {
 			case 2: {
 				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 1, e->experience / 2.0f, 0.0f);
 				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->experience / 2.0f, 0.0f);
@@ -982,13 +980,13 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 			}
 		}
 
-		Mix_Chunk* sound = (e->enemy_type >= TYPE_BOSS) ? snd_boss_explode : snd_explode;
+		Mix_Chunk* sound = (e->type >= TYPE_BOSS) ? snd_boss_explode : snd_explode;
 		play_sound(sound, e->x, e->y);
 
-		if (e->enemy_type >= TYPE_BOSS) {
+		if (e->type >= TYPE_BOSS) {
 			ScreenShake(e->x, e->y, 15.0f, 60.0f, true);
 			game->sleep(e->x, e->y, 100);
-		} else if (e->enemy_type >= TYPE_ENEMY) {
+		} else if (e->type >= TYPE_ENEMY) {
 			ScreenShake(e->x, e->y, 5.0f, 10.0f);
 			game->sleep(e->x, e->y, 50);
 		} else {
@@ -1171,7 +1169,7 @@ static void draw_object(Object* inst,
 }
 
 static void draw_bullet(Bullet* b, bool player) {
-	switch (b->bullet_type) {
+	switch (b->type) {
 		case BulletType::NORMAL: {
 			if (player) {
 				DrawCircleCamWarped(b->x, b->y, b->radius);
@@ -1533,7 +1531,7 @@ void World::draw_ui(float delta) {
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
 		
-		if (e->enemy_type < TYPE_BOSS) continue;
+		if (e->type < TYPE_BOSS) continue;
 
 		int w = 450;
 		int h = 18;
@@ -1570,7 +1568,7 @@ void World::update_interface(float delta) {
 			SDL_RenderClear(renderer);
 
 			for (int i = 0; i < enemy_count; i++) {
-				if (enemies[i].enemy_type < TYPE_ENEMY) {
+				if (enemies[i].type < TYPE_ENEMY) {
 					SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
 					SDL_RenderDrawPoint(renderer,
 										(int) (enemies[i].x / MAP_W * (float)INTERFACE_MAP_W),
@@ -1601,12 +1599,23 @@ void World::update_interface(float delta) {
 	}
 }
 
+static void CleanupObject(Enemy* e) {
+	if (e->co) {
+		mco_destroy(e->co);
+	}
+}
+static void CleanupObject(Bullet* b) {}
+static void CleanupObject(Ally* a) {}
+static void CleanupObject(Chest* c) {}
+
 template <typename T>
 static void DestroyObjectByIndex(T* &objects, int &object_count,
 								 int object_idx) {
 	if (object_count == 0) {
 		return;
 	}
+
+	CleanupObject(&objects[object_idx]);
 
 	for (int i = object_idx + 1; i < object_count; i++) {
 		objects[i - 1] = objects[i];
@@ -1616,7 +1625,7 @@ static void DestroyObjectByIndex(T* &objects, int &object_count,
 
 template <typename T>
 static T* CreateObject(T* &objects, int &object_count,
-					   int max_objects, ObjType type, instance_id &next_id,
+					   int max_objects, ObjType object_type, instance_id &next_id,
 					   const char* msg) {
 	if (object_count == max_objects) {
 		SDL_Log(msg);
@@ -1625,49 +1634,21 @@ static T* CreateObject(T* &objects, int &object_count,
 
 	T* result = &objects[object_count];
 	*result = {};
-	result->type = type;
+	result->object_type = object_type;
 	result->id = next_id++;
 	object_count++;
 
 	return result;
 }
 
-Enemy* World::CreateEnemy() {
-	if (enemy_count == MAX_ENEMIES) {
-		SDL_Log("Enemy limit hit.");
-		DestroyEnemyByIndex(0);
-	}
+Enemy*  World::CreateEnemy    () { return CreateObject(enemies,   enemy_count,    MAX_ENEMIES,     ObjType::ENEMY,         next_id, "Enemy limit hit."); }
+Bullet* World::CreateBullet   () { return CreateObject(bullets,   bullet_count,   MAX_BULLETS,     ObjType::BULLET,        next_id, "Bullet limit hit."); }
+Bullet* World::CreatePlrBullet() { return CreateObject(p_bullets, p_bullet_count, MAX_PLR_BULLETS, ObjType::PLAYER_BULLET, next_id, "Player bullets limit hit."); }
+Ally*   World::CreateAlly     () { return CreateObject(allies,    ally_count,     MAX_ALLIES,      ObjType::ALLY,          next_id, "Allies limit hit."); }
+Chest*  World::CreateChest    () { return CreateObject(chests,    chest_count,    MAX_CHESTS,      ObjType::CHEST,         next_id, "Chests limit hit."); }
 
-	Enemy* e = &enemies[enemy_count];
-	*e = {};
-	e->type = ObjType::ENEMY;
-	e->id = next_id++;
-	enemy_count++;
-
-	return e;
-}
-
-Bullet* World::CreateBullet   () { return CreateObject<Bullet>(bullets,   bullet_count,   MAX_BULLETS,     ObjType::BULLET,        next_id, "Bullet limit hit."); }
-Bullet* World::CreatePlrBullet() { return CreateObject<Bullet>(p_bullets, p_bullet_count, MAX_PLR_BULLETS, ObjType::PLAYER_BULLET, next_id, "Player bullets limit hit."); }
-Ally*   World::CreateAlly     () { return CreateObject<Ally>  (allies,    ally_count,     MAX_ALLIES,      ObjType::ALLY,          next_id, "Allies limit hit."); }
-Chest*  World::CreateChest    () { return CreateObject<Chest> (chests,    chest_count,    MAX_CHESTS,      ObjType::CHEST,         next_id, "Chests limit hit."); }
-
-void World::DestroyEnemyByIndex(int enemy_idx) {
-	if (enemy_count == 0) {
-		return;
-	}
-
-	if (enemies[enemy_idx].co) {
-		mco_destroy(enemies[enemy_idx].co);
-	}
-
-	for (int i = enemy_idx + 1; i < enemy_count; i++) {
-		enemies[i - 1] = enemies[i];
-	}
-	enemy_count--;
-}
-
-void World::DestroyBulletByIndex   (int bullet_idx)   { DestroyObjectByIndex<Bullet>(bullets,   bullet_count,   bullet_idx); }
-void World::DestroyPlrBulletByIndex(int p_bullet_idx) { DestroyObjectByIndex<Bullet>(p_bullets, p_bullet_count, p_bullet_idx); }
-void World::DestroyAllyByIndex     (int ally_idx)     { DestroyObjectByIndex<Ally>  (allies,    ally_count,     ally_idx); }
-void World::DestroyChestByIndex    (int chest_idx)    { DestroyObjectByIndex<Chest> (chests,    chest_count,    chest_idx); }
+void World::DestroyEnemyByIndex    (int enemy_idx)    { DestroyObjectByIndex(enemies,   enemy_count,    enemy_idx); }
+void World::DestroyBulletByIndex   (int bullet_idx)   { DestroyObjectByIndex(bullets,   bullet_count,   bullet_idx); }
+void World::DestroyPlrBulletByIndex(int p_bullet_idx) { DestroyObjectByIndex(p_bullets, p_bullet_count, p_bullet_idx); }
+void World::DestroyAllyByIndex     (int ally_idx)     { DestroyObjectByIndex(allies,    ally_count,     ally_idx); }
+void World::DestroyChestByIndex    (int chest_idx)    { DestroyObjectByIndex(chests,    chest_count,    chest_idx); }

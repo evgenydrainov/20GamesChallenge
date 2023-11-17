@@ -41,7 +41,7 @@ static Bullet* shoot_homing(Enemy* e, float dir,
 	b->y = e->y;
 	b->dmg = 15.0f;
 
-	b->bullet_type = BulletType::HOMING;
+	b->type = BulletType::HOMING;
 	b->dir = dir;
 	b->sprite = spr_missile;
 	b->lifespan = 10.0f * 60.0f;
