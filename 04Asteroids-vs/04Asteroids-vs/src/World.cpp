@@ -790,7 +790,7 @@ void World::UpdatePlayer(Player* p, float delta) {
 		float next_level_exp = get_next_level_exp(p);
 		if (p->experience >= next_level_exp) {
 			p->level++;
-			p->experience = fmodf(p->experience, next_level_exp);
+			p->experience -= next_level_exp;
 			play_sound(snd_powerup, p->x, p->y);
 		}
 	}
