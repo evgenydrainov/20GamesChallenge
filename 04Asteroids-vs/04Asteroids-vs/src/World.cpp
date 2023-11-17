@@ -123,8 +123,8 @@ void World::Init() {
 				c->type = CHEST_ITEM;
 				c->item = ITEM_MISSILES;
 				c->cost = 50.0f;
+			}
 		}
-	}
 	}
 
 	{
@@ -248,16 +248,15 @@ static void bullet_find_target(Bullet* b,
 							   float* out_target_x, float* out_target_y,
 							   float* out_target_dist,
 							   bool* out_found) {
-	Player* p = &world->player;
-
 	*out_found = false;
 
-	if (!(p->flags & FLAG_INSTANCE_DEAD)) {
-		float dist = point_distance_wrapped(b->x, b->y, p->x, p->y);
-
+	float rel_x;
+	float rel_y;
+	float dist;
+	if (Player* p = find_closest(&world->player, 1, b->x, b->y, &rel_x, &rel_y, &dist)) {
 		if (dist < DIST_OFFSCREEN) {
-			*out_target_x = p->x;
-			*out_target_y = p->y;
+			*out_target_x = rel_x;
+			*out_target_y = rel_y;
 			*out_target_dist = dist;
 			*out_found = true;
 		}
@@ -820,7 +819,7 @@ void World::UpdatePlayer(Player* p, float delta) {
 					switch (c->type) {
 						case CHEST_ITEM: p->items[c->item]++; break;
 						case CHEST_ACTIVE_ITEM: p->active_item = c->active_item; break;
-}
+					}
 					p->money -= c->cost;
 					c->opened = true;
 				}
