@@ -135,7 +135,7 @@ struct Ally : Object {
 
 struct Chest : Object {
 	int type;
-	float radius = 30.0f;
+	float radius = 40.0f;
 	float cost;
 	bool opened;
 
