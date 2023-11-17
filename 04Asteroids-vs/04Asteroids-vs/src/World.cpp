@@ -1496,7 +1496,7 @@ void World::draw_ui(float delta) {
 		DrawText(renderer, fnt_cp437, buf, x + w / 2, y + h / 2, HALIGN_CENTER, VALIGN_MIDDLE);
 
 		y += h;
-		y += 8;
+		y += 4;
 	}
 	{
 		// draw exp meter
@@ -1511,7 +1511,9 @@ void World::draw_ui(float delta) {
 		y += h;
 		y += 4;
 	}
+	y += 4;
 	{
+		// text info
 		y -= 2;
 		char buf[100];
 		stb_snprintf(buf, sizeof(buf),
