@@ -548,7 +548,7 @@ void World::Update(float delta) {
 					pb->lifespan = 10.0f * 60.0f;
 					pb->dir = p->dir;
 					pb->max_acc = 0.5f;
-					pb->max_spd = 12.5f;
+					pb->max_spd = 13.5f;
 
 					// side offset
 					pb->x += lengthdir_x(hoff, p->dir - 90.0f);
