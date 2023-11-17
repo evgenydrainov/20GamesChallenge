@@ -174,18 +174,18 @@ static bool ai_step(int cost, float chance,
 static void ai_tick(mco_coro* co, int &points, int &total_points) {
 	int count = 0;
 
-	for (;;) {
+	for (int i = points / 5; i--;) {
 		bool spawned = false;
 
-		if (ai_step(30, 25.0f, points, total_points, create_enemy_spread)) {spawned = true; count++;}
+		if (ai_step(10, 25.0f, points, total_points, create_enemy_spread)) {spawned = true; count++;}
 
-		if (ai_step(20, 25.0f, points, total_points, create_enemy_missile)) {spawned = true; count++;}
+		if (ai_step(10, 25.0f, points, total_points, create_enemy_missile)) {spawned = true; count++;}
 
-		if (ai_step(10, 50.0f, points, total_points, create_enemy)) {spawned = true; count++;}
+		if (ai_step(5, 50.0f, points, total_points, create_enemy)) {spawned = true; count++;}
 
-		if (!spawned || count >= 5) {
-			break;
-		}
+		// if (!spawned || count >= 5) {
+		// 	break;
+		// }
 	}
 }
 
@@ -193,23 +193,26 @@ void stage0_script(mco_coro* co) {
 	int points = 0;
 	int total_points = 0;
 
-	int tick_wait_time = random_range(&world->rng, 15, 30);
+	int tick_wait_time = 5;
 	int tick_wait_timer = 0;
 
 	world->ai_points = &points;
 	world->ai_tick_wait_time = &tick_wait_time;
 	world->ai_tick_wait_timer = &tick_wait_timer;
 
+	world->player.items[ITEM_MISSILES]++;
+	world->player.active_item = ACTIVE_ITEM_HEAL;
+
 	for (;;) {
-		if (world->get_enemy_count() < 10) {
+		// if (world->get_enemy_count() < 10) {
 			points++;
-		}
+		// }
 
 		tick_wait_timer++;
 		if (tick_wait_timer >= tick_wait_time) {
 			ai_tick(co, points, total_points);
 
-			tick_wait_time = random_range(&world->rng, 15, 30);
+			tick_wait_time = random_range(&world->rng, 5, 10);
 			tick_wait_timer = 0;
 		}
 
