@@ -49,12 +49,12 @@ inline float random_range(xoshiro256plusplus* rng, float a, float b) {
 
 // [a, b]
 inline int random_range(xoshiro256plusplus* rng, int a, int b) {
-	// int x = random_next(rng) >> 33;
-	// int result = a + x % (b - a + 1);
-	// return result;
+	int x = random_next(rng) >> 33ull; // discard sign bit
+	int result = a + x % (b - a + 1);
+	return result;
 
-	u64 x = random_next(rng);
-	return a + x % (b - a + 1);
+	// u64 x = random_next(rng);
+	// return a + x % (b - a + 1);
 }
 
 inline float random_chance(xoshiro256plusplus* rng, float percent) {

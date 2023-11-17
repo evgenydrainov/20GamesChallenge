@@ -7,11 +7,25 @@
 #include <SDL_ttf.h>
 
 Sprite Sprites[SPRITE_COUNT] = {
-	/* spr_player_ship */ { nullptr,  0,  0,  48,   48,   24,  24,  1,  1,  0.0f,          0 },
-	/* spr_asteroid1   */ { nullptr,  0,  0,  30,   30,   15,  15,  1,  1,  0.0f,          0 },
-	/* spr_asteroid2   */ { nullptr,  0,  0,  60,   60,   30,  30,  1,  1,  0.0f,          0 },
-	/* spr_asteroid3   */ { nullptr,  0,  0,  110,  110,  55,  55,  1,  1,  0.0f,          0 },
-	/* spr_invader     */ { nullptr,  0,  0,  56,   56,   28,  28,  2,  2,  1.0f / 40.0f,  0 }
+	/* spr_player_ship  */ { nullptr,  0,  0,  48,   48,   24,  24,  1,  1,  0.0f,          0 },
+	/* spr_asteroid1    */ { nullptr,  0,  0,  30,   30,   15,  15,  1,  1,  0.0f,          0 },
+	/* spr_asteroid2    */ { nullptr,  0,  0,  60,   60,   30,  30,  1,  1,  0.0f,          0 },
+	/* spr_asteroid3    */ { nullptr,  0,  0,  110,  110,  55,  55,  1,  1,  0.0f,          0 },
+	/* spr_invader      */ { nullptr,  0,  0,  56,   56,   28,  28,  2,  2,  1.0f / 40.0f,  0 },
+	/* spr_active_item  */ { nullptr,  0,  0,  50,   50,   0,   0,   2,  2,  0.0f,          0 },
+	/* spr_missile      */ { nullptr,  0,  0,  20,   20,   10,  10,  1,  1,  0.0f,          0 },
+	/* spr_chest        */ { nullptr,  0,  0,  50,   50,   25,  25,  2,  2,  0.0f,          0 }
+};
+
+static const char* sprite_file_path[SPRITE_COUNT] = {
+	"img/spr_player_ship.png",
+	"img/spr_asteroid1.png",
+	"img/spr_asteroid2.png",
+	"img/spr_asteroid3.png",
+	"img/spr_invader.png",
+	"img/spr_active_item.png",
+	"img/spr_missile.png",
+	"img/spr_chest.png"
 };
 
 SDL_Texture* Textures[TEXTURE_COUNT];
@@ -25,11 +39,9 @@ bool load_all_assets() {
 	bool error = false;
 
 	if (IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) {
-		if (!(spr_player_ship->texture = IMG_LoadTexture(renderer, "img/spr_player_ship.png"))) error = true;
-		if (!(spr_asteroid1->texture   = IMG_LoadTexture(renderer, "img/spr_asteroid1.png")))   error = true;
-		if (!(spr_asteroid2->texture   = IMG_LoadTexture(renderer, "img/spr_asteroid2.png")))   error = true;
-		if (!(spr_asteroid3->texture   = IMG_LoadTexture(renderer, "img/spr_asteroid3.png")))   error = true;
-		if (!(spr_invader->texture     = IMG_LoadTexture(renderer, "img/spr_invader.png")))     error = true;
+		for (int i = 0; i < SPRITE_COUNT; i++) {
+			if (!(Sprites[i].texture = IMG_LoadTexture(renderer, sprite_file_path[i]))) error = true;
+		}
 
 		if (!(tex_bg   = IMG_LoadTexture(renderer, "img/tex_bg.png")))   error = true;
 		if (!(tex_bg1  = IMG_LoadTexture(renderer, "img/tex_bg1.png")))  error = true;
@@ -38,8 +50,8 @@ bool load_all_assets() {
 	IMG_Quit();
 
 	if (TTF_Init() == 0) {
-		if (!LoadFontFromFileTTF(fnt_mincho, "font/mincho.ttf", 22, renderer)) error = true;
-		if (!LoadFontFromFileTTF(fnt_cp437,  "font/cp437.ttf",  16, renderer)) error = true;
+		if (!LoadFontFromFileTTF(renderer, fnt_mincho, "font/mincho.ttf", 22)) error = true;
+		if (!LoadFontFromFileTTF(renderer, fnt_cp437,  "font/cp437.ttf",  16)) error = true;
 	} else {
 		error = true;
 	}

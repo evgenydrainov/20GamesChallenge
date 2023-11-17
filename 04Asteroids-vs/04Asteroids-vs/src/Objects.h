@@ -2,18 +2,20 @@
 
 #include "common.h"
 #include "Sprite.h"
+#include "Items.h"
 #include "minicoro.h"
 
 typedef u32 instance_id;
 
-#define NULL_INSTANCE_ID 0xffffffffu
+#define NULL_INSTANCE_ID 0
 
 enum struct ObjType : u32 {
 	PLAYER,
 	ENEMY,
 	BULLET,
 	PLAYER_BULLET,
-	ALLY
+	ALLY,
+	CHEST
 };
 
 enum {
@@ -21,17 +23,21 @@ enum {
 };
 
 enum {
-	TYPE_ENEMY = 1000,
+	TYPE_ENEMY         = 1000,
+	TYPE_ENEMY_SPREAD  = 1001,
+	TYPE_ENEMY_MISSILE = 1002,
+
 	TYPE_BOSS  = 2000
 };
 
 enum {
-	ACTIVE_ITEM_NONE,
-	ACTIVE_ITEM_HEAL
+	ALLY_HEALING_DRONE
 };
 
-enum {
-	ALLY_HEALING_DRONE
+enum struct BulletType {
+	NORMAL,
+	HOMING,
+	LAZER
 };
 
 struct Object {
@@ -52,8 +58,9 @@ struct Player : Object {
 	float dir;
 	bool focus;
 
-	float power;
-	int power_level = 1;
+	float experience;
+	int level;
+	float money;
 
 	float health = 100.0f;
 	float max_health = 100.0f;
@@ -63,10 +70,11 @@ struct Player : Object {
 	float invincibility;
 	float fire_timer;
 	int fire_queue;
+	int shot;
 
-	u8 items[10];
-	u8 active_item = ACTIVE_ITEM_HEAL;
-	float active_item_timer;
+	u8 items[ITEM_COUNT];
+	u8 active_item;
+	float active_item_cooldown;
 };
 
 struct Enemy : Object {
@@ -74,7 +82,8 @@ struct Enemy : Object {
 	int enemy_type;
 	float health = 50.0f;
 	float max_health = 50.0f;
-	float power = 1.0f;
+	float experience;
+	float money;
 	float angle;
 	mco_coro* co;
 
@@ -99,13 +108,26 @@ struct Enemy : Object {
 };
 
 struct Bullet : Object {
+	BulletType bullet_type;
 	float radius = 5.0f;
 	float dmg = 10.0f;
 	float lifespan = 1.5f * 60.0f;
 	float lifetime;
+	union {
+		struct { // HOMING
+			float dir;
+			float t;
+			float max_spd;
+			float max_acc;
+		};
+	};
 };
 
 struct Ally : Object {
 	int ally_type;
 
+};
+
+struct Chest : Object {
+	
 };

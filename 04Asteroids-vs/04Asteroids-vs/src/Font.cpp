@@ -6,7 +6,8 @@
 SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 				   int x, int y,
 				   int halign, int valign,
-				   SDL_Color color) {
+				   SDL_Color color,
+				   float xscale, float yscale) {
 	if (!font) return {};
 	if (!font->texture) return {};
 	if (!font->glyphs) return {};
@@ -15,7 +16,7 @@ SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 	int text_y = y;
 
 	if (valign != VALIGN_TOP) {
-		SDL_Point text_size = MeasureText(font, text);
+		SDL_Point text_size = MeasureText(font, text, xscale, yscale);
 		if (valign == VALIGN_MIDDLE) {
 			text_y -= text_size.y / 2;
 		} else if (valign == VALIGN_BOTTOM) {
@@ -24,7 +25,7 @@ SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 	}
 
 	if (halign != HALIGN_LEFT) {
-		SDL_Point line_size = MeasureText(font, text, true);
+		SDL_Point line_size = MeasureText(font, text, xscale, yscale, true);
 		if (halign == HALIGN_CENTER) {
 			text_x -= line_size.x / 2;
 		} else if (halign == HALIGN_RIGHT) {
@@ -38,10 +39,10 @@ SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 		char ch = *it;
 		if (ch == '\n') {
 			text_x = x;
-			text_y += font->lineskip;
+			text_y += int(float(font->lineskip) * yscale);
 
 			if (halign != HALIGN_LEFT) {
-				SDL_Point line_size = MeasureText(font, it + 1, true);
+				SDL_Point line_size = MeasureText(font, it + 1, xscale, yscale, true);
 				if (halign == HALIGN_CENTER) {
 					text_x -= line_size.x / 2;
 				} else if (halign == HALIGN_RIGHT) {
@@ -62,15 +63,15 @@ SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 			SDL_Rect src = glyph->src;
 
 			SDL_Rect dest;
-			dest.x = text_x + glyph->xoffset;
-			dest.y = text_y + glyph->yoffset;
-			dest.w = src.w;
-			dest.h = src.h;
+			dest.x = text_x + int(float(glyph->xoffset) * xscale);
+			dest.y = text_y + int(float(glyph->yoffset) * yscale);
+			dest.w = int(float(src.w) * xscale);
+			dest.h = int(float(src.h) * yscale);
 
 			SDL_RenderCopy(renderer, font->texture, &src, &dest);
 		}
-		
-		text_x += glyph->advance;
+
+		text_x += int(float(glyph->advance) * xscale);
 	}
 
 	return {text_x, text_y};
@@ -79,15 +80,18 @@ SDL_Point DrawText(SDL_Renderer* renderer, Font* font, const char* text,
 SDL_Point DrawTextShadow(SDL_Renderer* renderer, Font* font, const char* text,
 						 int x, int y,
 						 int halign, int valign,
-						 SDL_Color color) {
-	DrawText(renderer, font, text, x + 1, y + 1, halign, valign, {0, 0, 0, 255});
-	return DrawText(renderer, font, text, x, y, halign, valign, color);
+						 SDL_Color color,
+						 float xscale, float yscale) {
+	DrawText(renderer, font, text, x + 1, y + 1, halign, valign, {0, 0, 0, 255}, xscale, yscale);
+	return DrawText(renderer, font, text, x, y, halign, valign, color, xscale, yscale);
 }
 
 static int max(int a, int b) { return (a > b) ? a : b; }
 static int min(int a, int b) { return (a < b) ? a : b; }
 
-SDL_Point MeasureText(Font* font, const char* text, bool only_one_line) {
+SDL_Point MeasureText(Font* font, const char* text,
+					  float xscale, float yscale,
+					  bool only_one_line) {
 	if (!font) return {};
 	if (!font->texture) return {};
 	if (!font->glyphs) return {};
@@ -96,7 +100,7 @@ SDL_Point MeasureText(Font* font, const char* text, bool only_one_line) {
 	int text_y = 0;
 
 	int text_w = 0;
-	int text_h = font->height;
+	int text_h = int(float(font->height) * yscale);
 
 	for (const char* it = text; *it; it++) {
 		char ch = *it;
@@ -106,8 +110,8 @@ SDL_Point MeasureText(Font* font, const char* text, bool only_one_line) {
 			}
 
 			text_x = 0;
-			text_y += font->lineskip;
-			text_h = max(text_h, text_y + font->height);
+			text_y += int(float(font->lineskip) * yscale);
+			text_h = max(text_h, text_y + int(float(font->height) * yscale));
 			continue;
 		}
 
@@ -118,28 +122,28 @@ SDL_Point MeasureText(Font* font, const char* text, bool only_one_line) {
 		GlyphData* glyph = &font->glyphs[ch - 32];
 
 		if (ch == ' ') {
-			text_w = max(text_w, text_x + glyph->advance);
-			text_h = max(text_h, text_y + font->height);
+			text_w = max(text_w, text_x + int(float(glyph->advance) * xscale));
+			text_h = max(text_h, text_y + int(float(font->height) * yscale));
 		} else {
 			SDL_Rect src = glyph->src;
 
 			SDL_Rect dest;
-			dest.x = text_x + glyph->xoffset;
-			dest.y = text_y + glyph->yoffset;
-			dest.w = src.w;
-			dest.h = src.h;
+			dest.x = text_x + int(float(glyph->xoffset) * xscale);
+			dest.y = text_y + int(float(glyph->yoffset) * yscale);
+			dest.w = int(float(src.w) * xscale);
+			dest.h = int(float(src.h) * yscale);
 
 			text_w = max(text_w, dest.x + dest.w);
-			text_h = max(text_h, text_y + font->height);
+			text_h = max(text_h, text_y + int(float(font->height) * yscale));
 		}
 
-		text_x += glyph->advance;
+		text_x += int(float(glyph->advance) * xscale);
 	}
 
 	return {text_w, text_h};
 }
 
-bool LoadFontFromFileTTF(Font* font, const char* fname, int ptsize, SDL_Renderer* renderer) {
+bool LoadFontFromFileTTF(SDL_Renderer* renderer, Font* font, const char* fname, int ptsize, int style) {
 	bool error = false;
 
 	TTF_Font* ttf_font = nullptr;
@@ -152,6 +156,8 @@ bool LoadFontFromFileTTF(Font* font, const char* fname, int ptsize, SDL_Renderer
 			error = true;
 			goto out;
 		}
+
+		TTF_SetFontStyle(ttf_font, style);
 
 		font->ptsize = ptsize;
 		font->glyphs = (GlyphData*) calloc(95, sizeof(*font->glyphs));

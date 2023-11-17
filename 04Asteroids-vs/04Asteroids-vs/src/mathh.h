@@ -122,3 +122,13 @@ static bool circle_vs_circle(float x1, float y1, float r1, float x2, float y2, f
 	float r = r1 + r2;
 	return (dx * dx + dy * dy) < (r * r);
 }
+
+static float signf(float x) {
+	if (x > 0.0f) {
+		return 1.0f;
+	} else if (x == 0.0f) {
+		return 0.0f;
+	} else {
+		return -1.0f;
+	}
+}

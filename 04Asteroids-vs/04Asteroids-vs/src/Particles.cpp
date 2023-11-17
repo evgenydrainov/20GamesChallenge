@@ -2,6 +2,7 @@
 
 #include "Game.h"
 #include "ecalloc.h"
+#include "mathh.h"
 
 void Particles::Init() {
 	particles = (Particle*) ecalloc(MAX_PARTICLES, sizeof(*particles));
@@ -22,15 +23,17 @@ void Particles::Update(float delta) {
 			continue;
 		}
 
-		p->hsp += p->hacc * delta;
-		p->vsp += p->vacc * delta;
+		PartType* type = &types[p->type];
+		float t = p->lifetime / p->lifespan;
 
-		p->x += p->hsp * delta;
-		p->y += p->vsp * delta;
+		float spd = lerp(type->spd_from, type->spd_to, t);
 
-		switch (p->type) {
-			case ParticleType::SPRITE: {
-				p->frame_index = sprite_get_next_frame_index(p->sprite, p->frame_index, delta);
+		p->x += lengthdir_x(spd, p->dir) * delta;
+		p->y += lengthdir_y(spd, p->dir) * delta;
+
+		switch (type->shape) {
+			case PartShape::SPRITE: {
+				p->frame_index = sprite_get_next_frame_index(type->sprite, p->frame_index, delta);
 				break;
 			}
 		}
@@ -43,85 +46,130 @@ void Particles::Draw(float delta) {
 	for (int i = 0; i < particle_count; i++) {
 		Particle* p = &particles[i];
 
-		switch (p->type) {
-			case ParticleType::CIRCLE: {
-				DrawCircleCamWarped(p->x, p->y, p->radius, p->color);
+		PartType* type = &types[p->type];
+		float t = p->lifetime / p->lifespan;
+
+		float r = lerp(float(type->color_from.r), float(type->color_to.r), t);
+		float g = lerp(float(type->color_from.g), float(type->color_to.g), t);
+		float b = lerp(float(type->color_from.b), float(type->color_to.b), t);
+		float a = lerp(float(type->color_from.a), float(type->color_to.a), t);
+		SDL_Color color = {u8(r), u8(g), u8(b), u8(a)};
+
+		switch (type->shape) {
+			case PartShape::CIRCLE: {
+				float radius = lerp(type->radius_from, type->radius_to, t);
+				DrawCircleCamWarped(p->x, p->y, radius, color);
 				break;
 			}
 
-			case ParticleType::SPRITE: {
-				DrawSpriteCamWarped(p->sprite, int(p->frame_index),
+			case PartShape::SPRITE: {
+				float xscale = lerp(type->xscale_from, type->xscale_to, t);
+				float yscale = lerp(type->yscale_from, type->yscale_to, t);
+				DrawSpriteCamWarped(type->sprite, int(p->frame_index),
 									p->x, p->y,
-									p->angle,
-									p->xscale, p->yscale,
-									p->color);
+									p->dir,
+									xscale, yscale,
+									color);
 				break;
 			}
 		}
 	}
 }
 
-Particle* Particles::CreateParticle() {
-	if (particle_count == MAX_PARTICLES) {
-		SDL_Log("Particle limit hit.");
-		DestroyParticleByIndex(0);
+void Particles::SetTypeCircle(int index,
+							  float spd_from, float spd_to,
+							  float dir_min, float dir_max,
+							  float lifespan_min, float lifespan_max,
+							  SDL_Color color_from, SDL_Color color_to,
+							  float radius_from, float radius_to) {
+	if (index < 0 || index >= MAX_PARTICLE_TYPES) {
+		return;
+	}
+	
+	PartType* type = &types[index];
+	*type = {};
+
+	type->shape = PartShape::CIRCLE;
+	type->spd_from = spd_from;
+	type->spd_to = spd_to;
+	type->dir_min = dir_min;
+	type->dir_max = dir_max;
+	type->lifespan_min = lifespan_min;
+	type->lifespan_max = lifespan_max;
+	type->color_from = color_from;
+	type->color_to = color_to;
+	type->radius_from = radius_from;
+	type->radius_to = radius_to;
+}
+
+void Particles::SetTypeSprite(int index,
+							  float spd_from, float spd_to,
+							  float dir_min, float dir_max,
+							  float lifespan_min, float lifespan_max,
+							  SDL_Color color_from, SDL_Color color_to,
+							  Sprite* sprite,
+							  float xscale_from, float xscale_to,
+							  float yscale_from, float yscale_to) {
+	if (index < 0 || index >= MAX_PARTICLE_TYPES) {
+		return;
 	}
 
-	Particle* result = &particles[particle_count];
-	*result = {};
-	particle_count++;
+	PartType* type = &types[index];
+	*type = {};
 
-	return result;
+	type->shape = PartShape::SPRITE;
+	type->spd_from = spd_from;
+	type->spd_to = spd_to;
+	type->dir_min = dir_min;
+	type->dir_max = dir_max;
+	type->lifespan_min = lifespan_min;
+	type->lifespan_max = lifespan_max;
+	type->color_from = color_from;
+	type->color_to = color_to;
+	type->sprite = sprite;
+	type->xscale_from = xscale_from;
+	type->xscale_to = xscale_to;
+	type->yscale_from = yscale_from;
+	type->yscale_to = yscale_to;
 }
 
-Particle* Particles::CreateCircle(float x, float y,
-								  float hsp, float vsp,
-								  float hacc, float vacc,
-								  float radius,
-								  SDL_Color color,
-								  float lifespan) {
-	Particle* result = CreateParticle();
-	result->type = ParticleType::CIRCLE;
+Particle* Particles::CreateParticles(float x, float y, int type, int count) {
+	Particle* result = nullptr;
 
-	result->x = x;
-	result->y = y;
-	result->hsp = hsp;
-	result->vsp = vsp;
-	result->hacc = hacc;
-	result->vacc = vacc;
-	result->color = color;
-	result->lifespan = lifespan;
+	if (type < 0 || type >= MAX_PARTICLE_TYPES) {
+		return result;
+	}
 
-	result->radius = radius;
+	while (count--) {
+		if (particle_count == MAX_PARTICLES) {
+			SDL_Log("Particle limit hit.");
+			DestroyParticleByIndex(0);
+		}
 
-	return result;
-}
+		result = &particles[particle_count];
+		*result = {};
+		result->type = type;
+		result->x = x;
+		result->y = y;
 
-Particle* Particles::CreateSprite(float x, float y,
-								  float hsp, float vsp,
-								  float hacc, float vacc,
-								  Sprite* sprite,
-								  float xscale,
-								  float yscale,
-								  float angle,
-								  SDL_Color color,
-								  float lifespan) {
-	Particle* result = CreateParticle();
-	result->type = ParticleType::SPRITE;
+		PartType* t = &types[type];
 
-	result->x = x;
-	result->y = y;
-	result->hsp = hsp;
-	result->vsp = vsp;
-	result->hacc = hacc;
-	result->vacc = vacc;
-	result->color = color;
-	result->lifespan = lifespan;
+		result->lifespan = random_range(&world->rng_visual, t->lifespan_min, t->lifespan_max);
+		result->dir = random_range(&world->rng_visual, t->dir_min, t->dir_max);
 
-	result->sprite = sprite;
-	result->xscale = xscale;
-	result->yscale = yscale;
-	result->angle = angle;
+		// switch (t->shape) {
+		// 	case PartShape::CIRCLE: {
+		// 		
+		// 		break;
+		// 	}
+		// 	case PartShape::SPRITE: {
+		// 
+		// 		break;
+		// 	}
+		// }
+
+		particle_count++;
+	}
 
 	return result;
 }

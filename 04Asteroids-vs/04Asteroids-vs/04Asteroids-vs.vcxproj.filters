@@ -86,5 +86,8 @@
     <ClInclude Include="src\Particles.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Items.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

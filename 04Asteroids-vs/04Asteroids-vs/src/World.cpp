@@ -13,6 +13,8 @@
 #define PLAYER_FOCUS_SPD 3.0f
 #define PLAYER_TURN_SPD 6.0f
 
+#define ACTIVE_ITEM_COOLDOWN (60.0f * 60.0f)
+
 #define ASTEROID_RADIUS_3 50.0f
 #define ASTEROID_RADIUS_2 25.0f
 #define ASTEROID_RADIUS_1 12.0f
@@ -22,15 +24,23 @@
 #define INTERFACE_MAP_W 200
 #define INTERFACE_MAP_H 200
 
+enum {
+	PARTICLE_ASTEROID_EXPLOSION,
+	PARTICLE_MISSILE_TRAIL
+};
+
 World* world;
 
-static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int enemy_type, float power = 1.0f) {
+static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int enemy_type,
+							float experience = 0.5f,
+							float money = 0.5f) {
 	Enemy* e = world->CreateEnemy();
 	e->x = x;
 	e->y = y;
 	e->hsp = hsp;
 	e->vsp = vsp;
-	e->power = power;
+	e->experience = experience;
+	e->money = money;
 	e->health = 1.0f;
 	e->max_health = 1.0f;
 	if (enemy_type == 3) {
@@ -56,6 +66,9 @@ void World::Init() {
 	p->id = next_id++;
 	p->x = MAP_W / 2.0f;
 	p->y = MAP_H / 2.0f;
+	// p->active_item = ACTIVE_ITEM_HEAL;
+	p->sprite = spr_player_ship;
+	// p->items[ITEM_MISSILES]++;
 
 	{
 		camera_base_x = p->x;
@@ -68,12 +81,43 @@ void World::Init() {
 		camera_top  = camera_y - camera_h / 2.0f;
 	}
 
-	enemies   = (Enemy*)  ecalloc(MAX_ENEMIES,     sizeof(*enemies));
-	bullets   = (Bullet*) ecalloc(MAX_BULLETS,     sizeof(*bullets));
-	p_bullets = (Bullet*) ecalloc(MAX_PLR_BULLETS, sizeof(*p_bullets));
-	allies    = (Ally*)   ecalloc(MAX_ALLIES,      sizeof(*allies));
+	enemies   = (Enemy*)  ecalloc(MAX_ENEMIES,     sizeof *enemies);
+	bullets   = (Bullet*) ecalloc(MAX_BULLETS,     sizeof *bullets);
+	p_bullets = (Bullet*) ecalloc(MAX_PLR_BULLETS, sizeof *p_bullets);
+	allies    = (Ally*)   ecalloc(MAX_ALLIES,      sizeof *allies);
+	chests    = (Chest*)  ecalloc(MAX_CHESTS,      sizeof *chests);
 
 	particles.Init();
+	particles.SetTypeCircle(PARTICLE_ASTEROID_EXPLOSION,
+							4.0f, 4.0f,
+							0.0f, 360.0f,
+							10.0f, 30.0f,
+							{255, 255, 255, 255}, {255, 255, 255, 255},
+							2.0f, 2.0f);
+	particles.SetTypeCircle(PARTICLE_MISSILE_TRAIL,
+							0.0f, 0.0f,
+							0.0f, 360.0f,
+							20.0f, 20.0f,
+							{255, 255, 255, 128}, {128, 128, 128, 128},
+							4.0f, 4.0f);
+
+	{
+		// spawn chests
+		for (int i = 10; i--;) {
+			float x = random_range(&rng, 0.0f, MAP_W);
+			float y = random_range(&rng, 0.0f, MAP_H);
+			float dist = point_distance_wrapped(x, y, p->x, p->y);
+			if (dist < 800.0f) {
+				i++;
+				continue;
+			}
+
+			Chest* c = CreateChest();
+			c->x = x;
+			c->y = y;
+			c->sprite = spr_chest;
+		}
+	}
 
 	{
 		// Spawn Asteroids.
@@ -81,7 +125,7 @@ void World::Init() {
 		while (i--) {
 			float x = random_range(&rng, 0.0f, MAP_W);
 			float y = random_range(&rng, 0.0f, MAP_H);
-			float dist = point_distance(x, y, player.x, player.y);
+			float dist = point_distance_wrapped(x, y, p->x, p->y);
 			if (dist < 800.0f) {
 				i++;
 				continue;
@@ -129,6 +173,8 @@ static Obj* find_closest(Obj* objects, int object_count,
 
 	for (int i = 0; i < object_count; i++) {
 		if (!filter(&objects[i])) continue;
+
+		if (objects[i].flags & FLAG_INSTANCE_DEAD) continue;
 
 		auto check = [i, objects, x, y, &result, &dist_sq, rel_x, rel_y, out_dist](float xoff, float yoff) {
 			float dx = x - (objects[i].x + xoff);
@@ -182,6 +228,148 @@ static void decelerate(Obj* o, float dec, float delta) {
 	}
 }
 
+static void limit_speed(float* hsp, float* vsp, float max_spd) {
+	float spd = length(*hsp, *vsp);
+	if (spd > max_spd) {
+		*hsp = *hsp / spd * max_spd;
+		*vsp = *vsp / spd * max_spd;
+	}
+}
+
+static void bullet_find_target(Bullet* b,
+							   float* out_target_x, float* out_target_y,
+							   float* out_target_dist,
+							   bool* out_found) {
+	Player* p = &world->player;
+
+	*out_found = false;
+
+	if (!(p->flags & FLAG_INSTANCE_DEAD)) {
+		float dist = point_distance_wrapped(b->x, b->y, p->x, p->y);
+
+		if (dist < DIST_OFFSCREEN) {
+			*out_target_x = p->x;
+			*out_target_y = p->y;
+			*out_target_dist = dist;
+			*out_found = true;
+		}
+	}
+}
+
+static void p_bullet_find_target(Bullet* b,
+								 float* out_target_x, float* out_target_y,
+								 float* out_target_dist,
+								 bool* out_found) {
+	Enemy* enemies = world->enemies;
+	int enemy_count = world->enemy_count;
+
+	*out_found = false;
+
+	float target_x;
+	float target_y;
+	float target_dist;
+	bool found = false;
+
+	Enemy* boss = find_closest(enemies,
+							   enemy_count,
+							   b->x, b->y,
+							   &target_x, &target_y,
+							   &target_dist,
+							   [](Enemy* e) { return e->enemy_type >= TYPE_BOSS; });
+
+	if (boss && target_dist < DIST_OFFSCREEN) found = true;
+
+	if (!found) {
+		Enemy* enemy = find_closest(enemies,
+									enemy_count,
+									b->x, b->y,
+									&target_x, &target_y,
+									&target_dist,
+									[](Enemy* e) { return TYPE_ENEMY <= e->enemy_type && e->enemy_type < TYPE_BOSS; });
+
+		if (enemy && target_dist < DIST_OFFSCREEN) found = true;
+	}
+
+	if (!found) {
+		Enemy* asteroid = find_closest(enemies,
+									   enemy_count,
+									   b->x, b->y,
+									   &target_x, &target_y,
+									   &target_dist,
+									   [](Enemy* e) { return e->enemy_type < TYPE_BOSS; });
+
+		if (asteroid && target_dist < DIST_OFFSCREEN) found = true;
+	}
+
+	if (found) {
+		*out_target_x = target_x;
+		*out_target_y = target_y;
+		*out_target_dist = target_dist;
+		*out_found = true;
+	}
+}
+
+static void update_bullet(Bullet* b,
+						  float delta,
+						  void (*find_target)(Bullet*, float*, float*, float*, bool*)) {
+	switch (b->bullet_type) {
+		case BulletType::HOMING: {
+			float target_x;
+			float target_y;
+			float target_dist;
+			bool found;
+			find_target(b, &target_x, &target_y, &target_dist, &found);
+
+			float hmove;
+			float vmove;
+			if (found && b->lifetime >= 60.0f) {
+				float dx = target_x - b->x;
+				float dy = target_y - b->y;
+				hmove = signf(dx);
+				vmove = signf(dy);
+			} else {
+				hmove =  dcos(b->dir);
+				vmove = -dsin(b->dir);
+			}
+
+			float acc;
+			const float acc_start_t = 30.0f;
+			const float acc_grow_t = 120.0f;
+			if (b->lifetime >= acc_start_t) {
+				acc = lerp(0.0f, b->max_acc,
+						   min(b->lifetime - acc_start_t, acc_grow_t) / acc_grow_t);
+			} else {
+				acc = 0.0f;
+			}
+			b->hsp += hmove * acc * delta;
+			b->vsp += vmove * acc * delta;
+
+			if (b->lifetime >= 60.0f) {
+				if (b->hsp != 0.0f || b->vsp != 0.0f) {
+					b->dir = point_direction(0.0f, 0.0f, b->hsp, b->vsp);
+				}
+			}
+
+			limit_speed(&b->hsp, &b->vsp, b->max_spd);
+
+			if (b->lifetime >= 30.0f) {
+				b->t += delta;
+				const float time = 5.0f;
+				if (b->t >= time) {
+					world->particles.CreateParticles(b->x, b->y, PARTICLE_MISSILE_TRAIL, 1);
+					b->t = fmodf(b->t, time);
+				}
+			}
+			break;
+		}
+	}
+
+	b->lifetime += delta;
+	if (b->lifetime >= b->lifespan) {
+		b->flags |= FLAG_INSTANCE_DEAD;
+	}
+}
+
 void World::Update(float delta) {
 	{
 		// Input.
@@ -194,9 +382,11 @@ void World::Update(float delta) {
 		input |= INPUT_UP    * key[SDL_SCANCODE_UP];
 		input |= INPUT_LEFT  * key[SDL_SCANCODE_LEFT];
 		input |= INPUT_DOWN  * key[SDL_SCANCODE_DOWN];
-		input |= INPUT_FIRE  * key[SDL_SCANCODE_Z];
-		input |= INPUT_FOCUS * key[SDL_SCANCODE_LSHIFT];
-		input |= INPUT_BOOST * key[SDL_SCANCODE_LCTRL];
+
+		input |= INPUT_FIRE     * key[SDL_SCANCODE_Z];
+		input |= INPUT_USE_ITEM * key[SDL_SCANCODE_X];
+		input |= INPUT_FOCUS    * key[SDL_SCANCODE_LSHIFT];
+		input |= INPUT_BOOST    * key[SDL_SCANCODE_LCTRL];
 
 		input_press   = ~prev &  input;
 		input_release =  prev & ~input;
@@ -238,46 +428,68 @@ void World::Update(float delta) {
 	{
 		Player* p = &player;
 
-		UpdatePlayer(p, delta);
+		if (!(p->flags & FLAG_INSTANCE_DEAD)) {
+			UpdatePlayer(p, delta);
+		}
+	}
+
+	for (int i = 0; i < bullet_count; i++) {
+		Bullet* b = &bullets[i];
+
+		update_bullet(b, delta, bullet_find_target);
+
+		if (b->flags & FLAG_INSTANCE_DEAD) {
+			DestroyBulletByIndex(i);
+			i--;
+		}
+	}
+
+	for (int i = 0; i < p_bullet_count; i++) {
+		Bullet* pb = &p_bullets[i];
+
+		update_bullet(pb, delta, p_bullet_find_target);
+
+		if (pb->flags & FLAG_INSTANCE_DEAD) {
+			DestroyPlrBulletByIndex(i);
+			i--;
+		}
 	}
 
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
-		switch (e->enemy_type) {
-			case TYPE_ENEMY: {
-				e->catch_up_timer -= delta;
-				if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
 
-				float rel_x;
-				float rel_y;
-				float dist;
-				if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
-					if (dist > 800.0f && e->catch_up_timer == 0.0f) {
-						e->catch_up_timer = 5.0f * 60.0f;
+		if (TYPE_ENEMY <= e->enemy_type && e->enemy_type < TYPE_BOSS) {
+			e->catch_up_timer -= delta;
+			if (e->catch_up_timer < 0.0f) e->catch_up_timer = 0.0f;
+
+			float rel_x;
+			float rel_y;
+			float dist;
+			if (Player* p = find_closest(&player, 1, e->x, e->y, &rel_x, &rel_y, &dist)) {
+				if (dist > 800.0f && e->catch_up_timer == 0.0f) {
+					e->catch_up_timer = 5.0f * 60.0f;
+				}
+
+				float dir = point_direction(e->x, e->y, rel_x, rel_y);
+				if (e->stop_when_close_to_player && dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
+					decelerate(e, 0.1f, delta);
+
+					e->angle = approach(e->angle, e->angle - angle_difference(e->angle, dir), 5.0f * delta);
+				} else {
+					if (!e->not_exact_player_dir || fabsf(angle_difference(e->angle, dir)) > 20.0f) {
+						e->hsp += lengthdir_x(e->acc, dir) * delta;
+						e->vsp += lengthdir_y(e->acc, dir) * delta;
+						e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
+					} else {
+						e->hsp += lengthdir_x(e->acc, e->angle) * delta;
+						e->vsp += lengthdir_y(e->acc, e->angle) * delta;
 					}
 
-					float dir = point_direction(e->x, e->y, rel_x, rel_y);
-					if (e->stop_when_close_to_player && dist < 200.0f && length(p->hsp, p->vsp) < 5.0f) {
-						decelerate(e, 0.1f, delta);
-
-						e->angle = approach(e->angle, e->angle - angle_difference(e->angle, dir), 5.0f * delta);
-					} else {
-						if (!e->not_exact_player_dir || SDL_fabsf(angle_difference(e->angle, dir)) > 20.0f) {
-							e->hsp += lengthdir_x(e->acc, dir) * delta;
-							e->vsp += lengthdir_y(e->acc, dir) * delta;
-							e->angle = point_direction(0.0f, 0.0f, e->hsp, e->vsp);
-						} else {
-							e->hsp += lengthdir_x(e->acc, e->angle) * delta;
-							e->vsp += lengthdir_y(e->acc, e->angle) * delta;
-						}
-
-						if (length(e->hsp, e->vsp) > e->max_spd) {
-							e->hsp = lengthdir_x(e->max_spd, e->angle);
-							e->vsp = lengthdir_y(e->max_spd, e->angle);
-						}
+					if (length(e->hsp, e->vsp) > e->max_spd) {
+						e->hsp = lengthdir_x(e->max_spd, e->angle);
+						e->vsp = lengthdir_y(e->max_spd, e->angle);
 					}
 				}
-				break;
 			}
 		}
 
@@ -288,8 +500,9 @@ void World::Update(float delta) {
 
 	// :late update
 
-	{
+	if (!(player.flags & FLAG_INSTANCE_DEAD)) {
 		Player* p = &player;
+
 		p->fire_timer += delta;
 		while (p->fire_timer >= 10.0f) {
 			if (input & INPUT_FIRE) {
@@ -317,17 +530,39 @@ void World::Update(float delta) {
 					return pb;
 				};
 
-				switch (p->power_level) {
-					case 1: {
+				auto shoot_homing = [=](float hoff) {
+					Bullet* pb = CreatePlrBullet();
+					pb->x = p->x;
+					pb->y = p->y;
+					pb->dmg = 30.0f;
+					pb->bullet_type = BulletType::HOMING;
+					pb->sprite = spr_missile;
+					pb->lifespan = 10.0f * 60.0f;
+					pb->dir = p->dir;
+					pb->max_acc = 0.5f;
+					pb->max_spd = 12.5f;
+
+					// side offset
+					pb->x += lengthdir_x(hoff, p->dir - 90.0f);
+					pb->y += lengthdir_y(hoff, p->dir - 90.0f);
+
+					pb->hsp = p->hsp;
+					pb->vsp = p->vsp;
+
+					return pb;
+				};
+
+				switch (p->level) {
+					case 0: {
 						shoot(20.0f, p->dir);
 						break;
 					}
-					case 2: {
+					case 1: {
 						shoot(20.0f, p->dir - 4.0f);
 						shoot(20.0f, p->dir + 4.0f);
 						break;
 					}
-					case 3: {
+					case 2: {
 						shoot(20.0f, p->dir,  10.0f);
 						shoot(20.0f, p->dir, -10.0f);
 
@@ -337,9 +572,17 @@ void World::Update(float delta) {
 					}
 				}
 
+				if (p->items[ITEM_MISSILES] > 0) {
+					if (p->shot % 15 == 0) {
+						shoot_homing( 25.0f);
+						shoot_homing(-25.0f);
+					}
+				}
+
 				play_sound(snd_shoot, p->x, p->y, 10);
 
 				p->fire_queue--;
+				p->shot++;
 			}
 
 			p->fire_timer -= 10.0f;
@@ -347,69 +590,53 @@ void World::Update(float delta) {
 
 		p->invincibility -= delta;
 		if (p->invincibility < 0.0f) p->invincibility = 0.0f;
+	}
+
+	{
+		Player* p = &player;
+
+		float target_x = p->x;
+		float target_y = p->y;
+
+		// Active cam.
+		target_x += lengthdir_x(100.0f, p->dir);
+		target_y += lengthdir_y(100.0f, p->dir);
+
+		camera_base_x += p->hsp * delta;
+		camera_base_y += p->vsp * delta;
 
 		{
-			float target_x = p->x;
-			float target_y = p->y;
-
-			// Active cam.
-			target_x += lengthdir_x(100.0f, p->dir);
-			target_y += lengthdir_y(100.0f, p->dir);
-
-			camera_base_x += p->hsp * delta;
-			camera_base_y += p->vsp * delta;
-
-			{
-				const float f = 1.0f - 0.02f;
-				camera_base_x = lerp(camera_base_x, target_x, 1.0f - powf(f, delta));
-				camera_base_y = lerp(camera_base_y, target_y, 1.0f - powf(f, delta));
-			}
-
-			{
-				const float f = 1.0f - 0.01f;
-				camera_scale = lerp(camera_scale, camera_scale_target, 1.0f - powf(f, delta));
-			}
-
-			screenshake_timer -= delta;
-			if (screenshake_timer < 0.0f) screenshake_timer = 0.0f;
-
-			camera_x = camera_base_x;
-			camera_y = camera_base_y;
-
-			if (screenshake_timer > 0.0f) {
-				if (screenshake_time >= 60.0f) {   // long
-					float f = screenshake_timer / screenshake_time;
-					float range = screenshake_intensity * f;
-					camera_x += random_range(&rng, -range, range);
-					camera_y += random_range(&rng, -range, range);
-				}
-				// else if (screenshake_time <= 6.0f) {  // short
-				// 	camera_x += float((frame % 2) * 2 - 1) * screenshake_intensity;
-				// }
-				else {
-					float range = screenshake_intensity;
-					camera_x += random_range(&rng, -range, range);
-					camera_y += random_range(&rng, -range, range);
-				}
-			}
+			const float f = 1.0f - 0.02f;
+			camera_base_x = lerp(camera_base_x, target_x, 1.0f - powf(f, delta));
+			camera_base_y = lerp(camera_base_y, target_y, 1.0f - powf(f, delta));
 		}
-	}
 
-	for (int i = 0; i < bullet_count; i++) {
-		Bullet* b = &bullets[i];
-		b->lifetime += delta;
-		if (b->lifetime >= b->lifespan) {
-			DestroyBulletByIndex(i);
-			i--;
+		{
+			const float f = 1.0f - 0.01f;
+			camera_scale = lerp(camera_scale, camera_scale_target, 1.0f - powf(f, delta));
 		}
-	}
 
-	for (int i = 0; i < p_bullet_count; i++) {
-		Bullet* pb = &p_bullets[i];
-		pb->lifetime += delta;
-		if (pb->lifetime >= pb->lifespan) {
-			DestroyPlrBulletByIndex(i);
-			i--;
+		screenshake_timer -= delta;
+		if (screenshake_timer < 0.0f) screenshake_timer = 0.0f;
+
+		camera_x = camera_base_x;
+		camera_y = camera_base_y;
+
+		if (screenshake_timer > 0.0f) {
+			if (screenshake_time >= 60.0f) {   // long
+				float f = screenshake_timer / screenshake_time;
+				float range = screenshake_intensity * f;
+				camera_x += random_range(&rng_visual, -range, range);
+				camera_y += random_range(&rng_visual, -range, range);
+			}
+			// else if (screenshake_time <= 6.0f) {  // short
+			// 	camera_x += float((frame % 2) * 2 - 1) * screenshake_intensity;
+			// }
+			else {
+				float range = screenshake_intensity;
+				camera_x += random_range(&rng_visual, -range, range);
+				camera_y += random_range(&rng_visual, -range, range);
+			}
 		}
 	}
 
@@ -421,6 +648,7 @@ void World::Update(float delta) {
 
 		for (int i = 0; i < enemy_count; i++) {
 			Enemy* e = &enemies[i];
+
 			if (e->co) {
 				if (mco_status(e->co) != MCO_DEAD) {
 					e->co->user_data = e;
@@ -434,9 +662,9 @@ void World::Update(float delta) {
 
 	particles.Update(delta);
 
-	if (game->key_pressed[SDL_SCANCODE_TAB]) {
-		hide_interface ^= true;
-	}
+	// if (game->key_pressed[SDL_SCANCODE_TAB]) {
+	// 	hide_interface ^= true;
+	// }
 	if (game->key_pressed[SDL_SCANCODE_H]) {
 		show_hitboxes ^= true;
 	}
@@ -455,7 +683,26 @@ l_skip_update:
 	frame++;
 }
 
+static void use_active_item(Player* p) {
+	if (p->active_item != ACTIVE_ITEM_NONE && p->active_item_cooldown == 0.0f) {
+		switch (p->active_item) {
+			case ACTIVE_ITEM_HEAL: {
+				p->health += 50.0f;
+				break;
+			}
+		}
+
+		p->active_item_cooldown = ACTIVE_ITEM_COOLDOWN;
+	}
+}
+
+static float get_next_level_exp(Player* p) {
+	return 100.0f + 20.0f * float(p->level);
+}
+
 void World::UpdatePlayer(Player* p, float delta) {
+	if (p->flags & FLAG_INSTANCE_DEAD) return;
+
 	p->focus = (input & INPUT_FOCUS) != 0;
 
 	float max_spd = PLAYER_MAX_SPD;
@@ -523,34 +770,38 @@ void World::UpdatePlayer(Player* p, float delta) {
 	}
 
 	// limit speed
-	float player_spd = length(p->hsp, p->vsp);
-	if (player_spd > max_spd) {
-		p->hsp = p->hsp / player_spd * max_spd;
-		p->vsp = p->vsp / player_spd * max_spd;
+	limit_speed(&p->hsp, &p->vsp, max_spd);
+
+	// use active item
+	if (input_press & INPUT_USE_ITEM) {
+		use_active_item(p);
 	}
 
+	// heal
 	p->health += (1.0f / 120.0f) * delta;
 	p->health = min(p->health, p->max_health);
 
+	// boost
 	if (!(input & INPUT_BOOST)) {
 		p->boost += (1.0f / 20.0f) * delta;
 		p->boost = min(p->boost, p->max_boost);
 	}
 
-	switch (p->power_level) {
-		case 1: {
-			if (p->power >= 50.0f) {p->power_level++; play_sound(snd_powerup, p->x, p->y);}
-			break;
-		}
-		case 2: {
-			if (p->power >= 200.0f) {p->power_level++; play_sound(snd_powerup, p->x, p->y);}
-			break;
+	// level up
+	{
+		float next_level_exp = get_next_level_exp(p);
+		if (p->experience >= next_level_exp) {
+			p->level++;
+			p->experience = fmodf(p->experience, next_level_exp);
+			play_sound(snd_powerup, p->x, p->y);
 		}
 	}
+
+	p->active_item_cooldown = max(p->active_item_cooldown - delta, 0.0f);
 }
 
 void World::PhysicsUpdate(float delta) {
-	{
+	if (!(player.flags & FLAG_INSTANCE_DEAD)) {
 		Player* p = &player;
 		p->x += p->hsp * delta;
 		p->y += p->vsp * delta;
@@ -599,7 +850,7 @@ void World::PhysicsUpdate(float delta) {
 
 	// :collision :coll
 
-	{
+	if (!(player.flags & FLAG_INSTANCE_DEAD)) {
 		Player* p = &player;
 
 		if (p->invincibility == 0.0f) {
@@ -642,7 +893,9 @@ void World::PhysicsUpdate(float delta) {
 
 		Player* p = &player;
 
-		auto collide_with_bullets = [=](Bullet* bullets, int bullet_count, void (World::*destroy)(int), bool give_power = false) {
+		auto collide_with_bullets = [=](Bullet* bullets, int bullet_count,
+										void (World::*destroy)(int),
+										bool player = false) {
 			for (int bullet_idx = 0; bullet_idx < bullet_count;) {
 				Bullet* b = &bullets[bullet_idx];
 
@@ -654,8 +907,12 @@ void World::PhysicsUpdate(float delta) {
 					bullet_count--;
 
 					if (!enemy_get_hit(e, dmg, split_dir)) {
-						if (give_power) {
-							p->power += e->power;
+						if (player) {
+							p->experience += e->experience;
+							p->money += e->money;
+
+							// todo
+							// player can get power while dead
 						}
 						return false;
 					}
@@ -691,6 +948,12 @@ void World::player_get_hit(Player* p, float dmg) {
 	p->health -= dmg;
 	p->invincibility = 60.0f;
 
+	if (p->health <= 0.0f) {
+		p->flags |= FLAG_INSTANCE_DEAD;
+		p->hsp = 0.0f;
+		p->vsp = 0.0f;
+	}
+
 	ScreenShake(p->x, p->y, 5.0f, 10.0f);
 	play_sound(snd_hurt, p->x, p->y);
 	game->sleep(p->x, p->y, 50);
@@ -708,13 +971,13 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 	if (e->health <= 0.0f) {
 		switch (e->enemy_type) {
 			case 2: {
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 1, e->power / 2.0f);
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->power / 2.0f);
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 1, e->experience / 2.0f, 0.0f);
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 1, e->experience / 2.0f, 0.0f);
 				break;
 			}
 			case 3: {
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 2, e->power / 2.0f);
-				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 2, e->power / 2.0f);
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir + 90.0f), e->vsp + lengthdir_y(1.0f, split_dir + 90.0f), 2, e->experience / 2.0f, 0.0f);
+				make_asteroid(e->x, e->y, e->hsp + lengthdir_x(1.0f, split_dir - 90.0f), e->vsp + lengthdir_y(1.0f, split_dir - 90.0f), 2, e->experience / 2.0f, 0.0f);
 				break;
 			}
 		}
@@ -729,9 +992,11 @@ bool World::enemy_get_hit(Enemy* e, float dmg, float split_dir, bool _play_sound
 			ScreenShake(e->x, e->y, 5.0f, 10.0f);
 			game->sleep(e->x, e->y, 50);
 		} else {
-			ScreenShake(e->x, e->y, 2.0f, 8.0f);
-			game->sleep(e->x, e->y, 20);
+			// ScreenShake(e->x, e->y, 2.0f, 8.0f);
+			// game->sleep(e->x, e->y, 20);
 		}
+
+		particles.CreateParticles(e->x, e->y, PARTICLE_ASTEROID_EXPLOSION, 4);
 
 		return false;
 	}
@@ -894,6 +1159,38 @@ void DrawSpriteCamWarped(Sprite* sprite, int frame_index,
 	draw( MAP_W,  MAP_H);
 }
 
+static void draw_object(Object* inst,
+						float angle = 0.0f,
+						float xscale = 1.0f, float yscale = 1.0f,
+						SDL_Color color = {255, 255, 255, 255}) {
+	DrawSpriteCamWarped(inst->sprite, int(inst->frame_index),
+						inst->x, inst->y,
+						angle,
+						xscale, yscale,
+						color);
+}
+
+static void draw_bullet(Bullet* b, bool player) {
+	switch (b->bullet_type) {
+		case BulletType::NORMAL: {
+			if (player) {
+				DrawCircleCamWarped(b->x, b->y, b->radius);
+			} else {
+				DrawCircleCamWarped(b->x, b->y, b->radius + 1.0f, {255, 0, 0, 255});
+				DrawCircleCamWarped(b->x, b->y, b->radius - 1.0f);
+			}
+			break;
+		}
+
+		case BulletType::HOMING: {
+			SDL_Color col = {255, 255, 255, 255};
+			if (!player) col = {255, 0, 0, 255};
+			draw_object(b, b->dir, 1.0f, 1.0f, col);
+			break;
+		}
+	}
+}
+
 void World::Draw(float delta) {
 	SDL_Renderer* renderer = game->renderer;
 
@@ -976,35 +1273,50 @@ void World::Draw(float delta) {
 		draw_bg(tex_bg1, 4.0f);
 	}
 
+	// draw chests
+	for (int i = 0; i < chest_count; i++) {
+		Chest* c = &chests[i];
+		draw_object(c);
+	}
+
 	// Draw enemies.
 	for (int i = 0; i < enemy_count; i++) {
 		Enemy* e = &enemies[i];
 		if (show_hitboxes) DrawCircleCamWarped(e->x, e->y, e->radius, {255, 0, 0, 255});
-		DrawSpriteCamWarped(e->sprite, int(e->frame_index), e->x, e->y, e->angle);
+		draw_object(e, e->angle);
 	}
 
 	{
 		// Draw player.
 
+		Player* p = &player;
+
 		SDL_Color col = {255, 255, 255, 255};
-		if (player.invincibility > 0.0f) {
+		if (p->invincibility > 0.0f) {
 			if ((SDL_GetTicks() / 16 / 4) % 2) col.a = 64;
 			else col.a = 192;
 		}
-		if (show_hitboxes) DrawCircleCamWarped(player.x, player.y, player.radius, {128, 255, 128, 255});
-		DrawSpriteCamWarped(spr_player_ship, 0, player.x, player.y, player.dir, 1.0f, 1.0f, col);
+
+		if (show_hitboxes) DrawCircleCamWarped(p->x, p->y, p->radius, {128, 255, 128, 255});
+		draw_object(p, p->dir, 1.0f, 1.0f, col);
+	}
+
+	// draw allies
+	for (int i = 0; i < ally_count; i++) {
+		Ally* a = &allies[i];
+		draw_object(a);
 	}
 
 	// Draw bullets.
 	for (int i = 0; i < bullet_count; i++) {
 		Bullet* b = &bullets[i];
-		DrawCircleCamWarped(b->x, b->y, b->radius);
+		draw_bullet(b, false);
 	}
 
 	// Draw player bullets.
 	for (int i = 0; i < p_bullet_count; i++) {
 		Bullet* pb = &p_bullets[i];
-		DrawCircleCamWarped(pb->x, pb->y, pb->radius);
+		draw_bullet(pb, true);
 	}
 
 	particles.Draw(delta);
@@ -1078,6 +1390,9 @@ void World::draw_ui(float delta) {
 
 	SDL_Renderer* renderer = game->renderer;
 
+	Player* p = &player;
+
+	// top left
 	int x = 10;
 	int y = 10;
 
@@ -1090,8 +1405,8 @@ void World::draw_ui(float delta) {
 		int w = 100;
 		int h = 100;
 		SDL_Rect src = {
-			(int) (player.x / MAP_W * (float)INTERFACE_MAP_W) - w / 2,
-			(int) (player.y / MAP_H * (float)INTERFACE_MAP_H) - h / 2,
+			(int) (p->x / MAP_W * (float)INTERFACE_MAP_W) - w / 2,
+			(int) (p->y / MAP_H * (float)INTERFACE_MAP_H) - h / 2,
 			w,
 			h
 		};
@@ -1113,10 +1428,10 @@ void World::draw_ui(float delta) {
 		// Draw healthbar.
 		int w = 180;
 		int h = 18;
-		draw_bar(x, y, w, h, player.health / player.max_health, {255, 0, 0, 255});
+		draw_bar(x, y, w, h, p->health / p->max_health, {255, 0, 0, 255});
 
 		char buf[32];
-		stb_snprintf(buf, sizeof(buf), "HEALTH %.0f/%.0f", player.health, player.max_health);
+		stb_snprintf(buf, sizeof(buf), "HEALTH %.0f/%.0f", p->health, p->max_health);
 		DrawText(renderer, fnt_cp437, buf, x + w / 2, y + h / 2, HALIGN_CENTER, VALIGN_MIDDLE);
 
 		y += h;
@@ -1126,14 +1441,27 @@ void World::draw_ui(float delta) {
 		// Draw boost meter.
 		int w = 180;
 		int h = 18;
-		draw_bar(x, y, w, h, player.boost / player.max_boost, {0, 0, 255, 255});
+		draw_bar(x, y, w, h, p->boost / p->max_boost, {0, 0, 255, 255});
 
 		char buf[32];
-		stb_snprintf(buf, sizeof(buf), "BOOST %.0f/%.0f", player.boost, player.max_boost);
+		stb_snprintf(buf, sizeof(buf), "BOOST %.0f/%.0f", p->boost, p->max_boost);
 		DrawText(renderer, fnt_cp437, buf, x + w / 2, y + h / 2, HALIGN_CENTER, VALIGN_MIDDLE);
 
 		y += h;
 		y += 8;
+	}
+	{
+		// draw exp meter
+		int w = 180;
+		int h = 18;
+		draw_bar(x, y, w, h, p->experience / get_next_level_exp(p), {128, 128, 255, 255});
+
+		char buf[32];
+		stb_snprintf(buf, sizeof(buf), "LEVEL %d (%.0f/%.0f)", p->level + 1, p->experience, get_next_level_exp(p));
+		DrawText(renderer, fnt_cp437, buf, x + w / 2, y + h / 2, HALIGN_CENTER, VALIGN_MIDDLE);
+
+		y += h;
+		y += 4;
 	}
 	{
 		y -= 2;
@@ -1141,23 +1469,78 @@ void World::draw_ui(float delta) {
 		stb_snprintf(buf, sizeof(buf),
 					 "X: %f\n"
 					 "Y: %f\n"
-					 "POWER: %.2f\n",
+					 "MONEY: %.2f\n",
 					 interface_x,
 					 interface_y,
-					 player.power);
+					 p->money);
 		y = DrawText(renderer, fnt_cp437, buf, x, y).y;
+	}
+
+	// top right
+	x = game->ui_w - 10;
+	y = 10;
+
+	{
+		// draw active item
+		float xx = float(x - spr_active_item->width);
+		float yy = float(y);
+		SDL_Color color = {255, 255, 255, 255};
+		if (p->active_item_cooldown > 0.0f) {
+			color = {128, 128, 128, 255};
+		}
+		DrawSprite(spr_active_item, p->active_item, xx, yy, 0.0f, 1.0f, 1.0f, color);
+
+		SDL_Rect rect = {int(xx), int(yy), spr_active_item->width, spr_active_item->height};
+
+		if (p->active_item_cooldown > 0.0f) {
+			char buf[16];
+			stb_snprintf(buf, sizeof(buf), "%.0f", ceilf(p->active_item_cooldown / 60.0f));
+			DrawText(renderer,
+					 fnt_cp437,
+					 buf,
+					 rect.x + rect.w / 2,
+					 rect.y + rect.h / 2,
+					 HALIGN_CENTER,
+					 VALIGN_MIDDLE,
+					 {255, 255, 255, 255},
+					 1.5f, 1.5f);
+		}
+
+		// outline
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderDrawRect(renderer, &rect);
+	}
+
+	const u8* key = SDL_GetKeyboardState(nullptr);
+	if (key[SDL_SCANCODE_TAB]) {
+		int scale = 2;
+
+		int w = INTERFACE_MAP_W * scale;
+		int h = INTERFACE_MAP_H * scale;
+
+		int x = (game->ui_w - w) / 2;
+		int y = (game->ui_h - h) / 2;
+
+		SDL_Rect dest = {x, y, w, h};
+		SDL_RenderCopy(renderer, interface_map_texture, nullptr, &dest);
+
+		// outline
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderDrawRect(renderer, &dest);
 	}
 
 	// Draw boss healthbar.
 	for (int i = 0; i < enemy_count; i++) {
-		if (enemies[i].enemy_type < TYPE_BOSS) continue;
+		Enemy* e = &enemies[i];
+		
+		if (e->enemy_type < TYPE_BOSS) continue;
 
 		int w = 450;
 		int h = 18;
 		SDL_Rect back = {(game->ui_w - w) / 2, 20, w, h};
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderFillRect(renderer, &back);
-		int filled_w = (int) (enemies[i].health / enemies[i].max_health * (float)w);
+		int filled_w = (int) (e->health / e->max_health * (float)w);
 		SDL_Rect filled = {back.x, back.y, filled_w, back.h};
 		SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 		SDL_RenderFillRect(renderer, &filled);
@@ -1166,7 +1549,7 @@ void World::draw_ui(float delta) {
 		SDL_RenderDrawRect(renderer, &back);
 
 		char buf[32];
-		stb_snprintf(buf, sizeof(buf), "BOSS %.0f/%.0f", enemies[i].health, enemies[i].max_health);
+		stb_snprintf(buf, sizeof(buf), "BOSS %.0f/%.0f", e->health, e->max_health);
 		DrawText(renderer, fnt_cp437, buf, back.x + w / 2, back.y + h / 2, HALIGN_CENTER, VALIGN_MIDDLE);
 
 		break;
@@ -1187,8 +1570,8 @@ void World::update_interface(float delta) {
 			SDL_RenderClear(renderer);
 
 			for (int i = 0; i < enemy_count; i++) {
-				SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 				if (enemies[i].enemy_type < TYPE_ENEMY) {
+					SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
 					SDL_RenderDrawPoint(renderer,
 										(int) (enemies[i].x / MAP_W * (float)INTERFACE_MAP_W),
 										(int) (enemies[i].y / MAP_H * (float)INTERFACE_MAP_H));
@@ -1199,6 +1582,7 @@ void World::update_interface(float delta) {
 						2,
 						2
 					};
+					SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 					SDL_RenderFillRect(renderer, &r);
 				}
 			}
@@ -1217,50 +1601,56 @@ void World::update_interface(float delta) {
 	}
 }
 
+template <typename T>
+static void DestroyObjectByIndex(T* &objects, int &object_count,
+								 int object_idx) {
+	if (object_count == 0) {
+		return;
+	}
+
+	for (int i = object_idx + 1; i < object_count; i++) {
+		objects[i - 1] = objects[i];
+	}
+	object_count--;
+}
+
+template <typename T>
+static T* CreateObject(T* &objects, int &object_count,
+					   int max_objects, ObjType type, instance_id &next_id,
+					   const char* msg) {
+	if (object_count == max_objects) {
+		SDL_Log(msg);
+		DestroyObjectByIndex<T>(objects, object_count, 0);
+	}
+
+	T* result = &objects[object_count];
+	*result = {};
+	result->type = type;
+	result->id = next_id++;
+	object_count++;
+
+	return result;
+}
+
 Enemy* World::CreateEnemy() {
 	if (enemy_count == MAX_ENEMIES) {
 		SDL_Log("Enemy limit hit.");
 		DestroyEnemyByIndex(0);
 	}
 
-	Enemy* result = &enemies[enemy_count];
-	*result = {};
-	result->type = ObjType::ENEMY;
-	result->id = next_id++;
+	Enemy* e = &enemies[enemy_count];
+	*e = {};
+	e->type = ObjType::ENEMY;
+	e->id = next_id++;
 	enemy_count++;
 
-	return result;
+	return e;
 }
 
-Bullet* World::CreateBullet() {
-	if (bullet_count == MAX_BULLETS) {
-		SDL_Log("Bullet limit hit.");
-		DestroyBulletByIndex(0);
-	}
-
-	Bullet* result = &bullets[bullet_count];
-	*result = {};
-	result->type = ObjType::BULLET;
-	result->id = next_id++;
-	bullet_count++;
-
-	return result;
-}
-
-Bullet* World::CreatePlrBullet() {
-	if (p_bullet_count == MAX_PLR_BULLETS) {
-		SDL_Log("Player bullets limit hit.");
-		DestroyPlrBulletByIndex(0);
-	}
-
-	Bullet* result = &p_bullets[p_bullet_count];
-	*result = {};
-	result->type = ObjType::PLAYER_BULLET;
-	result->id = next_id++;
-	p_bullet_count++;
-
-	return result;
-}
+Bullet* World::CreateBullet   () { return CreateObject<Bullet>(bullets,   bullet_count,   MAX_BULLETS,     ObjType::BULLET,        next_id, "Bullet limit hit."); }
+Bullet* World::CreatePlrBullet() { return CreateObject<Bullet>(p_bullets, p_bullet_count, MAX_PLR_BULLETS, ObjType::PLAYER_BULLET, next_id, "Player bullets limit hit."); }
+Ally*   World::CreateAlly     () { return CreateObject<Ally>  (allies,    ally_count,     MAX_ALLIES,      ObjType::ALLY,          next_id, "Allies limit hit."); }
+Chest*  World::CreateChest    () { return CreateObject<Chest> (chests,    chest_count,    MAX_CHESTS,      ObjType::CHEST,         next_id, "Chests limit hit."); }
 
 void World::DestroyEnemyByIndex(int enemy_idx) {
 	if (enemy_count == 0) {
@@ -1277,24 +1667,7 @@ void World::DestroyEnemyByIndex(int enemy_idx) {
 	enemy_count--;
 }
 
-void World::DestroyBulletByIndex(int bullet_idx) {
-	if (bullet_count == 0) {
-		return;
-	}
-
-	for (int i = bullet_idx + 1; i < bullet_count; i++) {
-		bullets[i - 1] = bullets[i];
-	}
-	bullet_count--;
-}
-
-void World::DestroyPlrBulletByIndex(int p_bullet_idx) {
-	if (p_bullet_count == 0) {
-		return;
-	}
-
-	for (int i = p_bullet_idx + 1; i < p_bullet_count; i++) {
-		p_bullets[i - 1] = p_bullets[i];
-	}
-	p_bullet_count--;
-}
+void World::DestroyBulletByIndex   (int bullet_idx)   { DestroyObjectByIndex<Bullet>(bullets,   bullet_count,   bullet_idx); }
+void World::DestroyPlrBulletByIndex(int p_bullet_idx) { DestroyObjectByIndex<Bullet>(p_bullets, p_bullet_count, p_bullet_idx); }
+void World::DestroyAllyByIndex     (int ally_idx)     { DestroyObjectByIndex<Ally>  (allies,    ally_count,     ally_idx); }
+void World::DestroyChestByIndex    (int chest_idx)    { DestroyObjectByIndex<Chest> (chests,    chest_count,    chest_idx); }

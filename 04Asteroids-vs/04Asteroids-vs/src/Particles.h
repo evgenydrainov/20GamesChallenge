@@ -3,33 +3,48 @@
 #include "Sprite.h"
 
 #define MAX_PARTICLES 1000
+#define MAX_PARTICLE_TYPES 16
 
-enum struct ParticleType {
+enum struct PartShape {
 	CIRCLE,
 	SPRITE
 };
 
-struct Particle {
-	ParticleType type;
-	float x;
-	float y;
-	float hsp;
-	float vsp;
-	float hacc;
-	float vacc;
-	float lifetime;
-	float lifespan;
-	SDL_Color color;
+struct PartType {
+	PartShape shape;
+	float spd_from;
+	float spd_to;
+	float dir_min;
+	float dir_max;
+	float lifespan_min;
+	float lifespan_max;
+	SDL_Color color_from;
+	SDL_Color color_to;
 	union {
 		struct { // CIRCLE
-			float radius;
+			float radius_from;
+			float radius_to;
 		};
 		struct { // SPRITE
 			Sprite* sprite;
+			float xscale_from;
+			float xscale_to;
+			float yscale_from;
+			float yscale_to;
+		};
+	};
+};
+
+struct Particle {
+	int type;
+	float x;
+	float y;
+	float dir;
+	float lifetime;
+	float lifespan;
+	union {
+		struct { // SPRITE
 			float frame_index;
-			float xscale;
-			float yscale;
-			float angle;
 		};
 	};
 };
@@ -38,30 +53,31 @@ struct Particles {
 	Particle* particles;
 	int particle_count;
 
+	PartType types[MAX_PARTICLE_TYPES];
+
 	void Init();
 	void Free();
 
 	void Update(float delta);
 	void Draw(float delta);
 
-	Particle* CreateParticle();
+	void SetTypeCircle(int index,
+					   float spd_from, float spd_to,
+					   float dir_min, float dir_max,
+					   float lifespan_min, float lifespan_max,
+					   SDL_Color color_from, SDL_Color color_to,
+					   float radius_from, float radius_to);
 
-	Particle* CreateCircle(float x, float y,
-						   float hsp, float vsp,
-						   float hacc, float vacc,
-						   float radius,
-						   SDL_Color color,
-						   float lifespan);
+	void SetTypeSprite(int index,
+					   float spd_from, float spd_to,
+					   float dir_min, float dir_max,
+					   float lifespan_min, float lifespan_max,
+					   SDL_Color color_from, SDL_Color color_to,
+					   Sprite* sprite,
+					   float xscale_from, float xscale_to,
+					   float yscale_from, float yscale_to);
 
-	Particle* CreateSprite(float x, float y,
-						   float hsp, float vsp,
-						   float hacc, float vacc,
-						   Sprite* sprite,
-						   float xscale,
-						   float yscale,
-						   float angle,
-						   SDL_Color color,
-						   float lifespan);
+	Particle* CreateParticles(float x, float y, int type, int count);
 
 	void DestroyParticleByIndex(int index);
 };

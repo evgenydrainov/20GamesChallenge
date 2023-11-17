@@ -38,6 +38,7 @@
     <ClInclude Include="src\ecalloc.h" />
     <ClInclude Include="src\Font.h" />
     <ClInclude Include="src\Game.h" />
+    <ClInclude Include="src\Items.h" />
     <ClInclude Include="src\mathh.h" />
     <ClInclude Include="src\Objects.h" />
     <ClInclude Include="src\Particles.h" />

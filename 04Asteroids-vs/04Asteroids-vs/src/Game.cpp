@@ -156,10 +156,7 @@ void Game::Frame() {
 
 #ifndef __EMSCRIPTEN__
 	{
-		SDL_RendererInfo info;
-		SDL_GetRendererInfo(renderer, &info);
-
-		if (!(info.flags & SDL_RENDERER_PRESENTVSYNC)) {
+		if (!get_vsync()) {
 			t = GetTime();
 			double time_left = frame_end_time - t;
 			if (time_left > 0.0) {
@@ -281,6 +278,8 @@ void Game::Draw(float delta) {
 	// Render game texture.
 	SDL_RenderCopy(renderer, game_texture, nullptr, nullptr);
 
+	SDL_RenderSetLogicalSize(renderer, 0, 0);
+
 	int x = 0;
 	int y = 300;
 	if (show_debug_info) {
@@ -294,13 +293,30 @@ void Game::Draw(float delta) {
 		if (state == GameState::PLAYING) {
 			char buf[100];
 			stb_snprintf(buf, sizeof(buf),
-						 "enemies: %d\n"
+						 "enemies: %d (%d all)\n"
 						 "bullets: %d\n"
-						 "player bullets: %d\n",
-						 world->enemy_count,
+						 "player bullets: %d\n"
+						 "allies: %d\n"
+						 "chests: %d\n"
+						 "particles: %d\n",
+						 world->get_enemy_count(), world->enemy_count,
 						 world->bullet_count,
-						 world->p_bullet_count);
+						 world->p_bullet_count,
+						 world->ally_count,
+						 world->chest_count,
+						 world->particles.particle_count);
 			y = DrawText(renderer, fnt_mincho, buf, x, y).y;
+			if (world->ai_points) {
+				char buf[50];
+				stb_snprintf(buf, sizeof buf,
+							 "ai points: %d\n"
+							 "ai wait time: %d\n"
+							 "ai wait timer: %d\n",
+							 *world->ai_points,
+							 *world->ai_tick_wait_time,
+							 *world->ai_tick_wait_timer);
+				y = DrawText(renderer, fnt_mincho, buf, x, y).y;
+			}
 		}
 		y += 10;
 	}

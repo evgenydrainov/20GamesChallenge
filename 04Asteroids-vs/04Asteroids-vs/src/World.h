@@ -13,6 +13,7 @@
 #define MAX_BULLETS 1000
 #define MAX_PLR_BULLETS 1000
 #define MAX_ALLIES 100
+#define MAX_CHESTS 100
 
 #define MAP_W 10'000.0f
 #define MAP_H 10'000.0f
@@ -24,9 +25,11 @@ enum {
 	INPUT_UP    = 1 << 1,
 	INPUT_LEFT  = 1 << 2,
 	INPUT_DOWN  = 1 << 3,
-	INPUT_FIRE  = 1 << 4,
-	INPUT_FOCUS = 1 << 5,
-	INPUT_BOOST = 1 << 6
+
+	INPUT_FIRE     = 1 << 4,
+	INPUT_USE_ITEM = 1 << 5,
+	INPUT_FOCUS    = 1 << 6,
+	INPUT_BOOST    = 1 << 7
 };
 
 struct World;
@@ -34,6 +37,7 @@ extern World* world;
 
 struct World {
 	Player player;
+
 	Enemy* enemies;
 	int enemy_count;
 	Bullet* bullets;
@@ -42,8 +46,10 @@ struct World {
 	int p_bullet_count;
 	Ally* allies;
 	int ally_count;
+	Chest* chests;
+	int chest_count;
 
-	instance_id next_id;
+	instance_id next_id = 1;
 
 	Particles particles;
 
@@ -65,6 +71,7 @@ struct World {
 	mco_coro* co;
 	float coro_timer;
 	xoshiro256plusplus rng;
+	xoshiro256plusplus rng_visual;
 	bool paused;
 	int frame;
 
@@ -84,6 +91,10 @@ struct World {
 		int cursor;
 	} pause_menu;
 
+	int* ai_points;
+	int* ai_tick_wait_time;
+	int* ai_tick_wait_timer;
+
 	void Init();
 	void Quit();
 
@@ -100,17 +111,27 @@ struct World {
 	void draw_ui(float delta);
 	void update_interface(float delta);
 
-	Enemy* CreateEnemy();
+	Enemy*  CreateEnemy();
 	Bullet* CreateBullet();
 	Bullet* CreatePlrBullet();
+	Ally*   CreateAlly();
+	Chest*  CreateChest();
 
-	void DestroyEnemy(instance_id id);
-	void DestroyBullet(instance_id id);
-	void DestroyPlrBullet(instance_id id);
-
-	void DestroyEnemyByIndex(int enemy_idx);
-	void DestroyBulletByIndex(int bullet_idx);
+	void DestroyEnemyByIndex    (int enemy_idx);
+	void DestroyBulletByIndex   (int bullet_idx);
 	void DestroyPlrBulletByIndex(int p_bullet_idx);
+	void DestroyAllyByIndex     (int ally_idx);
+	void DestroyChestByIndex    (int chest_idx);
+
+	int get_enemy_count() {
+		int result = 0;
+		for (int i = 0; i < enemy_count; i++) {
+			if (enemies[i].enemy_type >= TYPE_ENEMY) {
+				result++;
+			}
+		}
+		return result;
+	}
 };
 
 void DrawCircleCamWarped(float x, float y, float radius, SDL_Color color = {255, 255, 255, 255});

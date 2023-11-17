@@ -4,13 +4,16 @@
 #include "Font.h"
 #include <SDL_mixer.h>
 
-#define SPRITE_COUNT 5
+#define SPRITE_COUNT 8
 extern Sprite Sprites[SPRITE_COUNT];
-#define spr_player_ship (&Sprites[0])
-#define spr_asteroid1   (&Sprites[1])
-#define spr_asteroid2   (&Sprites[2])
-#define spr_asteroid3   (&Sprites[3])
-#define spr_invader     (&Sprites[4])
+#define spr_player_ship  (&Sprites[0])
+#define spr_asteroid1    (&Sprites[1])
+#define spr_asteroid2    (&Sprites[2])
+#define spr_asteroid3    (&Sprites[3])
+#define spr_invader      (&Sprites[4])
+#define spr_active_item  (&Sprites[5])
+#define spr_missile      (&Sprites[6])
+#define spr_chest        (&Sprites[7])
 
 #define TEXTURE_COUNT 3
 extern SDL_Texture* Textures[TEXTURE_COUNT];
