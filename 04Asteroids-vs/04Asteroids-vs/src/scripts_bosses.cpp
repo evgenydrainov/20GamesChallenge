@@ -9,11 +9,15 @@ static Bullet* bshoot(Enemy* e, float spd, float dir, bool _play_sound = true, b
 	return b;
 }
 
+static float dir_to_player(mco_coro* co) {
+	return point_direction_wrapped(self->x, self->y, world->player.x, world->player.y);
+}
+
 void boss0_script(mco_coro* co) {
 	float dir = 0.0f;
 	while (true) {
 		shoot_radial(self, 15, 360.0f / 15.0f, [=](int j) {
-			return bshoot(self, 6.5f, point_direction(self->x, self->y, world->player.x, world->player.y), false, false);
+			return bshoot(self, 6.5f, dir_to_player(co), false, false);
 		}, false);
 
 		for (int i = 10; i--;) {
@@ -31,11 +35,11 @@ void boss0_script(mco_coro* co) {
 void boss1_script(mco_coro* co) {
 	while (true) {
 		shoot_radial(self, 19, 360.0f / 19.0f, [=](int j) {
-			return bshoot(self, 4.0f, point_direction(self->x, self->y, world->player.x, world->player.y), false, false);
+			return bshoot(self, 4.0f, dir_to_player(co), false, false);
 		}, false);
 
 		shoot_radial(self, 21, 360.0f / 21.0f, [=](int j) {
-			return bshoot(self, 6.0f, point_direction(self->x, self->y, world->player.x, world->player.y), false, false);
+			return bshoot(self, 6.0f, dir_to_player(co), false, false);
 		});
 
 		wait(co, 30);

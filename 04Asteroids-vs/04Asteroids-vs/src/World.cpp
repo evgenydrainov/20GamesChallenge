@@ -854,7 +854,7 @@ void World::PhysicsUpdate(float delta) {
 		if (p->invincibility == 0.0f) {
 			for (int i = 0; i < bullet_count; i++) {
 				Bullet* b = &bullets[i];
-				if (circle_vs_circle(p->x, p->y, p->radius, b->x, b->y, b->radius)) {
+				if (circle_vs_circle_wrapped(p->x, p->y, p->radius, b->x, b->y, b->radius)) {
 					player_get_hit(p, b->dmg);
 
 					DestroyBulletByIndex(i);
@@ -869,11 +869,13 @@ void World::PhysicsUpdate(float delta) {
 			for (int i = 0, c = enemy_count; i < c; i++) {
 				Enemy* e = &enemies[i];
 
-				if (circle_vs_circle(p->x, p->y, p->radius, e->x, e->y, e->radius)) {
-					const float contact_damage = 15.0f;
+				if (circle_vs_circle_wrapped(p->x, p->y, p->radius, e->x, e->y, e->radius)) {
+					float contact_damage = 15.0f;
+					if (e->type < TYPE_ENEMY) contact_damage = 10.0f;
+
 					player_get_hit(p, contact_damage);
 
-					float split_dir = point_direction(p->x, p->y, e->x, e->y);
+					float split_dir = point_direction_wrapped(p->x, p->y, e->x, e->y);
 					if (!enemy_get_hit(e, contact_damage, split_dir, false)) {
 						DestroyEnemyByIndex(i);
 						c--;
@@ -897,8 +899,8 @@ void World::PhysicsUpdate(float delta) {
 			for (int bullet_idx = 0; bullet_idx < bullet_count;) {
 				Bullet* b = &bullets[bullet_idx];
 
-				if (circle_vs_circle(e->x, e->y, e->radius, b->x, b->y, b->radius)) {
-					float split_dir = point_direction(b->x, b->y, e->x, e->y);
+				if (circle_vs_circle_wrapped(e->x, e->y, e->radius, b->x, b->y, b->radius)) {
+					float split_dir = point_direction_wrapped(b->x, b->y, e->x, e->y);
 
 					float dmg = b->dmg;
 					(this->*destroy)(bullet_idx);

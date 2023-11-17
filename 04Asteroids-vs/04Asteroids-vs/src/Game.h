@@ -65,4 +65,9 @@ struct Game {
 };
 
 float point_distance_wrapped(float x1, float y1, float x2, float y2);
+
 bool is_on_screen(float x, float y);
+
+float circle_vs_circle_wrapped(float x1, float y1, float r1, float x2, float y2, float r2);
+
+float point_direction_wrapped(float x1, float y1, float x2, float y2);

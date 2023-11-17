@@ -443,3 +443,28 @@ bool is_on_screen(float x, float y) {
 
 	return result;
 }
+
+float circle_vs_circle_wrapped(float x1, float y1, float r1, float x2, float y2, float r2) {
+	float d = point_distance_wrapped(x1, y1, x2, y2);
+	return d < (r1 + r2);
+}
+
+float point_direction_wrapped(float x1, float y1, float x2, float y2) {
+	float dist = INFINITY;
+	float d;
+	float dir = 0.0f;
+
+	d = point_distance(x1 - MAP_W, y1 - MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 - MAP_W, y1 - MAP_H, x2, y2);}
+	d = point_distance(x1,         y1 - MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1,         y1 - MAP_H, x2, y2);}
+	d = point_distance(x1 + MAP_W, y1 - MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 + MAP_W, y1 - MAP_H, x2, y2);}
+
+	d = point_distance(x1 - MAP_W, y1,         x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 - MAP_W, y1,         x2, y2);}
+	d = point_distance(x1,         y1,         x2, y2); if (d < dist) {dist = d; dir = point_direction(x1,         y1,         x2, y2);}
+	d = point_distance(x1 + MAP_W, y1,         x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 + MAP_W, y1,         x2, y2);}
+
+	d = point_distance(x1 - MAP_W, y1 + MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 - MAP_W, y1 + MAP_H, x2, y2);}
+	d = point_distance(x1,         y1 + MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1,         y1 + MAP_H, x2, y2);}
+	d = point_distance(x1 + MAP_W, y1 + MAP_H, x2, y2); if (d < dist) {dist = d; dir = point_direction(x1 + MAP_W, y1 + MAP_H, x2, y2);}
+
+	return dir;
+}
