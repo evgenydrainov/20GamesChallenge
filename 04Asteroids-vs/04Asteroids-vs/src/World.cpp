@@ -517,11 +517,11 @@ void World::Update(float delta) {
 			}
 
 			if (p->fire_queue > 0) {
-				auto shoot = [=](float spd, float dir, float hoff = 0.0f) {
+				auto shoot = [=](float spd, float dir, float dmg, float hoff = 0.0f) {
 					Bullet* pb = CreatePlrBullet();
 					pb->x = p->x;
 					pb->y = p->y;
-					pb->dmg = 10.0f;
+					pb->dmg = dmg;
 
 					// forward offset
 					pb->x += lengthdir_x(20.0f, dir);
@@ -537,11 +537,11 @@ void World::Update(float delta) {
 					return pb;
 				};
 
-				auto shoot_homing = [=](float hoff) {
+				auto shoot_homing = [=](float dmg, float hoff) {
 					Bullet* pb = CreatePlrBullet();
 					pb->x = p->x;
 					pb->y = p->y;
-					pb->dmg = 30.0f;
+					pb->dmg = dmg;
 					pb->type = BulletType::HOMING;
 					pb->sprite = spr_missile;
 					pb->lifespan = 10.0f * 60.0f;
@@ -559,31 +559,33 @@ void World::Update(float delta) {
 					return pb;
 				};
 
+				const float base_dmg = 10.0f;
+
 				switch (p->level) {
 					case 0: {
-						shoot(20.0f, p->dir);
+						shoot(20.0f, p->dir, base_dmg);
 						break;
 					}
 					case 1: {
-						shoot(20.0f, p->dir - 4.0f);
-						shoot(20.0f, p->dir + 4.0f);
+						shoot(20.0f, p->dir - 4.0f, base_dmg * 0.75f);
+						shoot(20.0f, p->dir + 4.0f, base_dmg * 0.75f);
 						break;
 					}
 					default:
 					case 2: {
-						shoot(20.0f, p->dir,  10.0f);
-						shoot(20.0f, p->dir, -10.0f);
+						shoot(20.0f, p->dir, base_dmg * 0.75f,  10.0f);
+						shoot(20.0f, p->dir, base_dmg * 0.75f, -10.0f);
 
-						shoot(20.0f, p->dir - 30.0f,  10.0f);
-						shoot(20.0f, p->dir + 30.0f, -10.0f);
+						shoot(20.0f, p->dir - 30.0f, base_dmg * 0.50f,  10.0f);
+						shoot(20.0f, p->dir + 30.0f, base_dmg * 0.50f, -10.0f);
 						break;
 					}
 				}
 
 				if (p->items[ITEM_MISSILES] > 0) {
 					if (p->shot % 15 == 0) {
-						shoot_homing( 25.0f);
-						shoot_homing(-25.0f);
+						shoot_homing(base_dmg,  25.0f);
+						shoot_homing(base_dmg, -25.0f);
 					}
 				}
 

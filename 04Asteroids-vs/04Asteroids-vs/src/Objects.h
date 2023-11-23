@@ -115,7 +115,7 @@ struct Enemy : Object {
 struct Bullet : Object {
 	BulletType type;
 	float radius = 5.0f;
-	float dmg = 10.0f;
+	float dmg;
 	float lifespan = 1.5f * 60.0f;
 	float lifetime;
 	union {
