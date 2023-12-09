@@ -26,10 +26,27 @@
 
 enum {
 	PARTICLE_ASTEROID_EXPLOSION,
-	PARTICLE_MISSILE_TRAIL
+	PARTICLE_MISSILE_TRAIL,
+	PARTICLE_TEXT_POPUP
 };
 
 World* world;
+
+const char* ItemNames[ITEM_COUNT] = {
+	/* ITEM_MISSILES      */ "Missiles"
+};
+
+const char* ItemDescriptions[ITEM_COUNT] = {
+	/* ITEM_MISSILES      */ "Launch homing missiles."
+};
+
+const char* ActiveItemNames[ACTIVE_ITEM_COUNT] = {
+	/* ACTIVE_ITEM_HEAL       */ "Medkit"
+};
+
+const char* ActiveItemDescriptions[ACTIVE_ITEM_COUNT] = {
+	/* ACTIVE_ITEM_HEAL       */ "Heals 50 HP."
+};
 
 static Enemy* make_asteroid(float x, float y, float hsp, float vsp, int type,
 							float experience = 0.5f,
@@ -98,6 +115,16 @@ void World::Init() {
 							20.0f, 20.0f,
 							{255, 255, 255, 128}, {128, 128, 128, 128},
 							4.0f, 4.0f);
+	{
+		PartType* t = &particles.types[PARTICLE_TEXT_POPUP];
+		t->shape = PartShape::TEXT;
+		t->spd_from = t->spd_to = 0.5f;
+		t->dir_min = t->dir_max = 90.0f;
+		t->lifespan_min = t->lifespan_max = 3.0f * 60.0f;
+		t->color_from = t->color_to = {255, 255, 255, 255};
+		t->font = fnt_cp437;
+		t->xscale_from = t->xscale_to = t->yscale_from = t->yscale_to = 1.5f;
+	}
 
 	{
 		// spawn chests
@@ -517,6 +544,8 @@ void World::Update(float delta) {
 			}
 
 			if (p->fire_queue > 0) {
+				// player shot type
+
 				auto shoot = [=](float spd, float dir, float dmg, float hoff = 0.0f) {
 					Bullet* pb = CreatePlrBullet();
 					pb->x = p->x;
@@ -566,13 +595,17 @@ void World::Update(float delta) {
 						shoot(20.0f, p->dir, base_dmg);
 						break;
 					}
-					case 1: {
+
+					case 1:
+					case 2:
+					case 3: {
 						shoot(20.0f, p->dir - 4.0f, base_dmg * 0.75f);
 						shoot(20.0f, p->dir + 4.0f, base_dmg * 0.75f);
 						break;
 					}
+
 					default:
-					case 2: {
+					case 4: {
 						shoot(20.0f, p->dir, base_dmg * 0.75f,  10.0f);
 						shoot(20.0f, p->dir, base_dmg * 0.75f, -10.0f);
 
@@ -707,7 +740,7 @@ static void use_active_item(Player* p) {
 }
 
 static float get_next_level_exp(Player* p) {
-	return 100.0f + 20.0f * float(p->level);
+	return 100.0f + 10.0f * float(p->level);
 }
 
 void World::UpdatePlayer(Player* p, float delta) {
@@ -809,6 +842,8 @@ void World::UpdatePlayer(Player* p, float delta) {
 
 	p->active_item_cooldown = max(p->active_item_cooldown - delta, 0.0f);
 
+	const u8* key = SDL_GetKeyboardState(nullptr);
+
 	// open chests
 	for (int i = 0; i < chest_count; i++) {
 		Chest* c = &chests[i];
@@ -817,10 +852,21 @@ void World::UpdatePlayer(Player* p, float delta) {
 
 		if (circle_vs_circle_wrapped(p->x, p->y, p->radius, c->x, c->y, c->radius)) {
 			if (input_press & INPUT_FIRE) {
-				if (p->money >= c->cost) {
+				if (p->money >= c->cost || key[SDL_SCANCODE_LALT]) {
+					// get item
 					switch (c->type) {
-						case CHEST_ITEM: p->items[c->item]++; break;
-						case CHEST_ACTIVE_ITEM: p->active_item = c->active_item; break;
+						case CHEST_ITEM: {
+							p->items[c->item]++;
+							Particle* p = particles.CreateParticles(c->x, c->y, PARTICLE_TEXT_POPUP, 1);
+							p->text = ItemNames[c->item];
+							break;
+						}
+						case CHEST_ACTIVE_ITEM: {
+							p->active_item = c->active_item;
+							Particle* p = particles.CreateParticles(c->x, c->y, PARTICLE_TEXT_POPUP, 1);
+							p->text = ActiveItemNames[c->active_item];
+							break;
+						}
 					}
 					p->money -= c->cost;
 					c->opened = true;
@@ -1321,10 +1367,10 @@ void World::Draw(float delta) {
 		if (circle_vs_circle_wrapped(p->x, p->y, p->radius, c->x, c->y, c->radius)) {
 			char buf[32];
 			stb_snprintf(buf, sizeof buf, "[Z] Open Chest - $%.0f", c->cost);
-			DrawTextShadow(renderer, fnt_cp437, buf,
-						   int(c->x - camera_left),
-						   int(c->y - camera_top) + 50,
-						   HALIGN_CENTER, VALIGN_MIDDLE);
+			DrawTextShadowCamWarped(renderer, fnt_cp437, buf,
+									int(c->x),
+									int(c->y) + 50,
+									HALIGN_CENTER, VALIGN_MIDDLE);
 		}
 	}
 
@@ -1531,6 +1577,7 @@ void World::draw_ui(float delta) {
 	x = game->ui_w - 10;
 	y = 10;
 
+	SDL_Rect active_item_rect;
 	{
 		// draw active item
 		float xx = float(x - spr_active_item->width);
@@ -1539,9 +1586,12 @@ void World::draw_ui(float delta) {
 		if (p->active_item_cooldown > 0.0f) {
 			color = {128, 128, 128, 255};
 		}
-		DrawSprite(spr_active_item, p->active_item, xx, yy, 0.0f, 1.0f, 1.0f, color);
+		u8 frame_index = p->active_item;
+		frame_index++;
+		DrawSprite(spr_active_item, frame_index, xx, yy, 0.0f, 1.0f, 1.0f, color);
 
 		SDL_Rect rect = {int(xx), int(yy), spr_active_item->width, spr_active_item->height};
+		active_item_rect = rect;
 
 		if (p->active_item_cooldown > 0.0f) {
 			char buf[16];
@@ -1605,6 +1655,75 @@ void World::draw_ui(float delta) {
 
 		break;
 	}
+
+	// middle bottom
+
+	// draw items
+	x = 10;
+	y = game->ui_h - spr_item->height - 10;
+	for (u8 i = 0; i < ITEM_COUNT; i++) {
+		if (p->items[i] > 0) {
+			DrawSprite(spr_item, i, float(x), float(y), 0.0f, 1.0f, 1.0f, {255, 255, 255, 128});
+			x += spr_item->width + 10;
+		}
+	}
+
+	// mouse hover text info
+
+	SDL_Point mouse = {int(game->ui_mouse_x), int(game->ui_mouse_y)};
+
+	// active item
+	if (SDL_PointInRect(&mouse, &active_item_rect)) {
+		char buf[256];
+		if (p->active_item == ACTIVE_ITEM_NONE) {
+			stb_snprintf(buf, sizeof buf, "\nActive item\n\nActive item desc.");
+		} else {
+			stb_snprintf(buf, sizeof buf,
+							"\n%s\n\n%s",
+							ActiveItemNames[p->active_item],
+							ActiveItemDescriptions[p->active_item]);
+		}
+		int x = mouse.x;
+		int y = mouse.y;
+		Font* font = fnt_cp437;
+		SDL_Point size = MeasureText(font, buf);
+		// x = min(x, game->ui_w - 10 - size.x);
+		// y = min(y, game->ui_h - 10 - size.y);
+		if (x >= game->ui_w - 10 - size.x) x -= size.x;
+		if (y >= game->ui_h - 10 - size.y) y -= size.y;
+		DrawTextShadow(renderer,
+						font,
+						buf,
+						x, y);
+	}
+
+	// items
+	x = 10;
+	y = game->ui_h - spr_item->height - 10;
+	for (u8 i = 0; i < ITEM_COUNT; i++) {
+		if (p->items[i] > 0) {
+			SDL_Rect rect = {x, y, spr_item->width, spr_item->height};
+			if (SDL_PointInRect(&mouse, &rect)) {
+				char buf[256];
+				stb_snprintf(buf, sizeof buf,
+							 "\n%s\n\n%s",
+							 ItemNames[i],
+							 ItemDescriptions[i]);
+				int x = mouse.x;
+				int y = mouse.y;
+				Font* font = fnt_cp437;
+				SDL_Point size = MeasureText(font, buf);
+				if (x >= game->ui_w - 10 - size.x) x -= size.x;
+				if (y >= game->ui_h - 10 - size.y) y -= size.y;
+				DrawTextShadow(renderer,
+							   font,
+							   buf,
+							   x, y);
+			}
+
+			x += spr_item->width + 10;
+		}
+	}
 }
 
 void World::update_interface(float delta) {
@@ -1650,6 +1769,65 @@ void World::update_interface(float delta) {
 
 		interface_update_timer = 5.0f;
 	}
+}
+
+SDL_Point DrawTextCamWarped(SDL_Renderer* renderer, Font* font, const char* text,
+							int x, int y,
+							int halign, int valign,
+							SDL_Color color,
+							float xscale, float yscale) {
+	SDL_Point result = {};
+
+	auto draw = [renderer, font, text, x, y, halign, valign, color, xscale, yscale, &result](int xoff, int yoff) {
+		SDL_Point size = MeasureText(font, text, xscale, yscale);
+
+		SDL_Rect contains = {
+			x + xoff,
+			y + yoff,
+			size.x,
+			size.y
+		};
+
+		SDL_Rect screen = {
+			int(world->camera_left),
+			int(world->camera_top),
+			int(world->camera_w),
+			int(world->camera_h)
+		};
+
+		if (SDL_HasIntersection(&contains, &screen)) {
+			result = DrawText(renderer,
+							  font,
+							  text,
+							  contains.x - screen.x,
+							  contains.y - screen.y,
+							  halign, valign,
+							  color, xscale, yscale);
+		}
+	};
+
+	draw((int) -MAP_W, (int) -MAP_H);
+	draw((int)  0,     (int) -MAP_H);
+	draw((int)  MAP_W, (int) -MAP_H);
+
+	draw((int) -MAP_W, (int) 0);
+	draw((int)  0,     (int) 0);
+	draw((int)  MAP_W, (int) 0);
+
+	draw((int) -MAP_W, (int) MAP_H);
+	draw((int)  0,     (int) MAP_H);
+	draw((int)  MAP_W, (int) MAP_H);
+
+	return result;
+}
+
+SDL_Point DrawTextShadowCamWarped(SDL_Renderer* renderer, Font* font, const char* text,
+								  int x, int y,
+								  int halign, int valign,
+								  SDL_Color color,
+								  float xscale, float yscale) {
+	DrawTextCamWarped(renderer, font, text, x + 1, y + 1, halign, valign, {0, 0, 0, 255}, xscale, yscale);
+	return DrawTextCamWarped(renderer, font, text, x, y, halign, valign, color, xscale, yscale);
 }
 
 static void CleanupObject(Enemy* e) {

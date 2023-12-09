@@ -1,6 +1,7 @@
 #include "Particles.h"
 
 #include "Game.h"
+#include "Font.h"
 #include "ecalloc.h"
 #include "mathh.h"
 
@@ -70,6 +71,19 @@ void Particles::Draw(float delta) {
 									p->dir,
 									xscale, yscale,
 									color);
+				break;
+			}
+
+			case PartShape::TEXT: {
+				float xscale = lerp(type->xscale_from, type->xscale_to, t);
+				float yscale = lerp(type->yscale_from, type->yscale_to, t);
+				DrawTextShadowCamWarped(renderer,
+										type->font,
+										p->text,
+										int(p->x), int(p->y),
+										HALIGN_CENTER, VALIGN_MIDDLE,
+										color,
+										xscale, yscale);
 				break;
 			}
 		}

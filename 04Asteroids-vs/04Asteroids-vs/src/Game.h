@@ -41,6 +41,8 @@ struct Game {
 	int ui_w = GAME_W;
 	int ui_h = GAME_H;
 	int ui_scale = 1;
+	float ui_mouse_x;
+	float ui_mouse_y;
 	int camera_base_w = GAME_W;
 	int camera_base_h = GAME_H;
 	int game_texture_w = GAME_W;

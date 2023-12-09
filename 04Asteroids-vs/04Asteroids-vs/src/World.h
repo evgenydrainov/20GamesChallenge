@@ -35,6 +35,11 @@ enum {
 struct World;
 extern World* world;
 
+extern const char* ItemNames[ITEM_COUNT];
+extern const char* ItemDescriptions[ITEM_COUNT];
+extern const char* ActiveItemNames[ACTIVE_ITEM_COUNT];
+extern const char* ActiveItemDescriptions[ACTIVE_ITEM_COUNT];
+
 struct World {
 	Player player;
 
@@ -49,7 +54,7 @@ struct World {
 	Chest* chests;
 	int chest_count;
 
-	instance_id next_id = 1;
+	instance_id next_id;
 
 	Particles particles;
 
@@ -140,3 +145,15 @@ void DrawSpriteCamWarped(Sprite* sprite, int frame_index,
 						 float x, float y,
 						 float angle = 0.0f, float xscale = 1.0f, float yscale = 1.0f,
 						 SDL_Color color = {255, 255, 255, 255});
+
+SDL_Point DrawTextCamWarped(SDL_Renderer* renderer, Font* font, const char* text,
+							int x, int y,
+							int halign = 0, int valign = 0,
+							SDL_Color color = {255, 255, 255, 255},
+							float xscale = 1.0f, float yscale = 1.0f);
+
+SDL_Point DrawTextShadowCamWarped(SDL_Renderer* renderer, Font* font, const char* text,
+								  int x, int y,
+								  int halign = 0, int valign = 0,
+								  SDL_Color color = {255, 255, 255, 255},
+								  float xscale = 1.0f, float yscale = 1.0f);

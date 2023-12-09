@@ -7,7 +7,7 @@
 
 typedef u32 instance_id;
 
-#define NULL_INSTANCE_ID 0
+#define NULL_INSTANCE_ID ((instance_id)0xffffffff)
 
 enum struct ObjType : u32 {
 	PLAYER,
@@ -78,7 +78,7 @@ struct Player : Object {
 	int shot;
 
 	u8 items[ITEM_COUNT];
-	u8 active_item;
+	u8 active_item = ACTIVE_ITEM_NONE;
 	float active_item_cooldown;
 };
 

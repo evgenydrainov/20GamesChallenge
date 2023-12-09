@@ -12,9 +12,10 @@ Sprite Sprites[SPRITE_COUNT] = {
 	/* spr_asteroid2    */ { nullptr,  0,  0,  60,   60,   30,  30,  1,  1,  0.0f,          0 },
 	/* spr_asteroid3    */ { nullptr,  0,  0,  110,  110,  55,  55,  1,  1,  0.0f,          0 },
 	/* spr_invader      */ { nullptr,  0,  0,  56,   56,   28,  28,  2,  2,  1.0f / 40.0f,  0 },
-	/* spr_active_item  */ { nullptr,  0,  0,  50,   50,   0,   0,   2,  2,  0.0f,          0 },
+	/* spr_active_item  */ { nullptr,  0,  0,  50,   50,   0,   0,   ACTIVE_ITEM_COUNT+1,  ACTIVE_ITEM_COUNT+1,  0.0f,          0 },
 	/* spr_missile      */ { nullptr,  0,  0,  20,   20,   10,  10,  1,  1,  0.0f,          0 },
-	/* spr_chest        */ { nullptr,  0,  0,  50,   50,   25,  25,  4,  4,  0.0f,          0 }
+	/* spr_chest        */ { nullptr,  0,  0,  50,   50,   25,  25,  4,  4,  0.0f,          0 },
+	/* spr_item         */ { nullptr,  0,  0,  50,   50,   0,   0,   ITEM_COUNT,  ITEM_COUNT,  0.0f,          0 }
 };
 
 static const char* sprite_file_path[SPRITE_COUNT] = {
@@ -25,7 +26,8 @@ static const char* sprite_file_path[SPRITE_COUNT] = {
 	"img/spr_invader.png",
 	"img/spr_active_item.png",
 	"img/spr_missile.png",
-	"img/spr_chest.png"
+	"img/spr_chest.png",
+	"img/spr_item.png"
 };
 
 SDL_Texture* Textures[TEXTURE_COUNT];

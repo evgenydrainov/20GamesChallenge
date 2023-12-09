@@ -7,8 +7,11 @@
 
 enum struct PartShape {
 	CIRCLE,
-	SPRITE
+	SPRITE,
+	TEXT
 };
+
+struct Font;
 
 struct PartType {
 	PartShape shape;
@@ -26,11 +29,18 @@ struct PartType {
 			float radius_to;
 		};
 		struct { // SPRITE
-			Sprite* sprite;
 			float xscale_from;
 			float xscale_to;
 			float yscale_from;
 			float yscale_to;
+			Sprite* sprite;
+		};
+		struct { // TEXT
+			float xscale_from;
+			float xscale_to;
+			float yscale_from;
+			float yscale_to;
+			Font* font;
 		};
 	};
 };
@@ -45,6 +55,9 @@ struct Particle {
 	union {
 		struct { // SPRITE
 			float frame_index;
+		};
+		struct { // TEXT
+			const char* text;
 		};
 	};
 };

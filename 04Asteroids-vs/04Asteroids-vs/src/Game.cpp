@@ -117,13 +117,11 @@ void Game::Frame() {
 					key_pressed[scancode] = true;
 				}
 
-				if (ev.key.keysym.mod != 0) {
-					break;
-				}
-
 				switch (scancode) {
 					case SDL_SCANCODE_F4: {
-						set_fullscreen(!get_fullscreen());
+						if (ev.key.keysym.mod == 0) {
+							set_fullscreen(!get_fullscreen());
+						}
 						break;
 					}
 
@@ -224,6 +222,16 @@ void Game::Draw(float delta) {
 
 		ui_w = game_texture_w / ui_scale;
 		ui_h = game_texture_h / ui_scale;
+	}
+
+	{
+		SDL_SetRenderTarget(renderer, nullptr);
+		SDL_RenderSetLogicalSize(renderer, ui_w, ui_h);
+
+		int mouse_x;
+		int mouse_y;
+		u32 mouse = SDL_GetMouseState(&mouse_x, &mouse_y);
+		SDL_RenderWindowToLogical(renderer, mouse_x, mouse_y, &ui_mouse_x, &ui_mouse_y);
 	}
 
 	{
