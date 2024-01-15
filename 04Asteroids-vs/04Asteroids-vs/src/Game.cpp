@@ -16,6 +16,8 @@ void Game::Init() {
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 	SDL_Log("Starting game...");
 
+	SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "system");
+
 	if (SDL_Init(SDL_INIT_AUDIO
 				 | SDL_INIT_VIDEO) != 0) {
 		ERROR("Couldn't initialize SDL: %s", SDL_GetError());
