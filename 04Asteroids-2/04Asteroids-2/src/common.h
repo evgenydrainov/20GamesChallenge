@@ -5,10 +5,12 @@
 //                 SECTION: Common types.
 // -----------------------------------------------------------
 
-#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stddef.h> // for ptrdiff_t
 #include <math.h>
+#include <limits.h> // for INT_MAX
 
 #include <stdarg.h>   // for va_list
 #include <string.h>   // for memcpy
@@ -48,9 +50,13 @@ struct Rectf {
 #define log_error(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 
 #ifdef NDEBUG
-#define Assert(expr) while (!(expr)) { log_error("ASSERTION FAILED: " #expr); exit(1); }
+	#define Assert(expr) while (!(expr)) { log_error("ASSERTION FAILED: " #expr); exit(1); }
 #else
-#define Assert(expr) while (!(expr)) __debugbreak()
+	#ifdef _MSC_VER
+		#define Assert(expr) while (!(expr)) __debugbreak()
+	#else
+		#define Assert(expr) while (!(expr)) __builtin_trap()
+	#endif
 #endif
 
 // 
