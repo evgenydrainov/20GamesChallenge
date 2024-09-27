@@ -5,13 +5,14 @@
 //                 SECTION: Common types.
 // -----------------------------------------------------------
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <stddef.h> // for ptrdiff_t
-#include <math.h>
-#include <limits.h> // for INT_MAX
+#include <SDL.h>
+#include <stb/stb_sprintf.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glad/gl.h>
 
+#include <math.h>
+#include <stdint.h>
 #include <stdarg.h>   // for va_list
 #include <string.h>   // for memcpy
 
@@ -21,6 +22,12 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 
 typedef ptrdiff_t ssize_t;
+
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
+
+using glm::mat4;
 
 struct Rect {
 	int x;
@@ -46,18 +53,43 @@ struct Rectf {
 // Logging and assert
 // 
 
-#define log_info(fmt, ...)  printf(fmt "\n", ##__VA_ARGS__)
-#define log_error(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
+#define log_info(fmt, ...)  SDL_LogInfo (SDL_LOG_CATEGORY_APPLICATION, fmt, ##__VA_ARGS__)
+#define log_error(fmt, ...) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, fmt, ##__VA_ARGS__)
 
+//
+// For now, asserts will be enabled in release build.
+//
 #ifdef NDEBUG
-	#define Assert(expr) while (!(expr)) { log_error("ASSERTION FAILED: " #expr); exit(1); }
+	#define Assert(expr) while (!(expr)) panic_and_abort("Assertion Failed: " #expr)
 #else
-	#ifdef _MSC_VER
-		#define Assert(expr) while (!(expr)) __debugbreak()
-	#else
-		#define Assert(expr) while (!(expr)) __builtin_trap()
-	#endif
+	#define Assert(expr) while (!(expr)) trigger_breakpoint()
 #endif
+
+#define panic_and_abort(fmt, ...) do { \
+		char buf[512]; \
+		stb_snprintf(buf, sizeof(buf), __FILE__ ":" STRINGIFY(__LINE__) ": " fmt, ##__VA_ARGS__); \
+		log_error("%s", buf); \
+		try_to_exit_fullscreen_properly(); \
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", buf, window); \
+		SDL_Quit(); \
+		exit(1); \
+	} while (0)
+
+#define trigger_breakpoint() do { \
+		try_to_exit_fullscreen_properly(); \
+		SDL_TriggerBreakpoint(); \
+	} while (0)
+
+extern SDL_Window* window; // from window_creation.h
+
+inline void try_to_exit_fullscreen_properly() {
+	// @Todo: Probably needed only for Windows
+	if (window) {
+		SDL_SetWindowFullscreen(window, 0);
+		SDL_Event ev;
+		while (SDL_PollEvent(&ev)) {}
+	}
+}
 
 // 
 // For loop
@@ -81,18 +113,18 @@ struct Rectf {
 
 template<typename T>
 struct ExitScope {
-    T lambda;
-    ExitScope(T lambda):lambda(lambda){}
-    ~ExitScope(){lambda();}
-    ExitScope(const ExitScope&);
-  private:
-    ExitScope& operator =(const ExitScope&);
+	T lambda;
+	ExitScope(T lambda):lambda(lambda){}
+	~ExitScope(){lambda();}
+	ExitScope(const ExitScope&);
+private:
+	ExitScope& operator =(const ExitScope&);
 };
- 
+
 class ExitScopeHelp {
-  public:
-    template<typename T>
-        ExitScope<T> operator+(T t){ return t;}
+public:
+	template<typename T>
+	ExitScope<T> operator+(T t){ return t;}
 };
 
 #define defer const auto& CONCAT(_defer__, __LINE__) = ExitScopeHelp() + [&]()
@@ -104,19 +136,14 @@ class ExitScopeHelp {
 #define GENERATE_ENUM(x) x,
 #define GENERATE_STRING(x) #x,
 
-
-// 
-// @Todo: The "Get##Type##Name" function is static, so I think the "names" array is
-// copied a bunch of times.
-// 
 #define DEFINE_NAMED_ENUM(Type, List) \
-enum Type { List(GENERATE_ENUM) }; \
-static const char* Get##Type##Name(Type val) { \
-	static const char* names[] = { List(GENERATE_STRING) }; \
-	Assert(val >= 0); \
-	Assert(val < ArrayLength(names)); \
-	return names[val]; \
-}
+	enum Type { List(GENERATE_ENUM) }; \
+	inline const char* Get##Type##Name(Type val) { \
+		static const char* names[] = { List(GENERATE_STRING) }; \
+		Assert(val >= 0); \
+		Assert(val < ArrayLength(names)); \
+		return names[val]; \
+	}
 
 // 
 // Human-readable printing for filesizes.
@@ -125,7 +152,7 @@ static const char* Get##Type##Name(Type val) { \
 #define Size_Fmt "%.7g %s"
 #define Size_Arg(size) format_size_float(size), format_size_string(size)
 
-static float format_size_float(size_t bytes) {
+inline float format_size_float(size_t bytes) {
 	float result = (float)bytes;
 	if (bytes >= 1024) {
 		result /= 1024.0f;
@@ -143,7 +170,7 @@ static float format_size_float(size_t bytes) {
 	return result;
 }
 
-static const char* format_size_string(size_t bytes) {
+inline const char* format_size_string(size_t bytes) {
 	const char* result = "bytes";
 	if (bytes >= 1024) {
 		result = "KB";
@@ -161,6 +188,16 @@ static const char* format_size_string(size_t bytes) {
 }
 
 
+inline vec4 get_color(u32 rgba) {
+	vec4 result;
+	result.r = ((rgba >> 24) & 0xFF) / 255.0f;
+	result.g = ((rgba >> 16) & 0xFF) / 255.0f;
+	result.b = ((rgba >>  8) & 0xFF) / 255.0f;
+	result.a = ((rgba >>  0) & 0xFF) / 255.0f;
+	return result;
+}
+
+
 
 // --------------------------------------------------------
 //                  SECTION: Math
@@ -173,80 +210,74 @@ static const char* format_size_string(size_t bytes) {
 // 
 
 template <typename T>
-static T min(T a, T b) {
+inline T min(T a, T b) {
 	return (a < b) ? a : b;
 }
 
 template <typename T>
-static T max(T a, T b) {
+inline T max(T a, T b) {
 	return (a > b) ? a : b;
 }
 
 template <typename T>
-static T clamp(T a, T mn, T mx) {
+inline T clamp(T a, T mn, T mx) {
 	return max(min(a, mx), mn);
 }
 
 template <typename T>
-static void Clamp(T* a, T mn, T mx) {
+inline void Clamp(T* a, T mn, T mx) {
 	*a = clamp(*a, mn, mx);
 }
 
 template <typename T>
-static T lerp(T a, T b, float f) {
+inline T lerp(T a, T b, float f) {
 	return a + (b - a) * f;
 }
 
 template <typename T>
-static T lerp_delta(T a, T b, float f, float delta) {
+inline T lerp_delta(T a, T b, float f, float delta) {
 	f = 1.0f - f;
 	return lerp(a, b, 1.0f - powf(f, delta));
 }
 
-static void normalize0(float& x, float& y) {
-	float length = sqrtf(x * x + y * y);
+inline vec2 normalize0(vec2 v) {
+	float length = sqrtf(v.x * v.x + v.y * v.y);
 	if (length != 0) {
-		x /= length;
-		y /= length;
+		return {v.x / length, v.y / length};
 	} else {
-		x = 0;
-		y = 0;
+		return {0, 0};
 	}
 }
 
 template <typename T>
-static T approach(T start, T end, T shift) {
+inline T approach(T start, T end, T shift) {
 	return start + clamp(end - start, -shift, shift);
 }
 
-#ifndef PI
-#define PI 3.14159265359f
-#endif
+inline float to_degrees(float rad) { return glm::degrees(rad); }
+inline float to_radians(float deg) { return glm::radians(deg); }
 
-static float to_degrees(float rad) { return rad / PI * 180.0f; }
-static float to_radians(float deg) { return deg / 180.0f * PI; }
+inline float dsin(float deg) { return sinf(to_radians(deg)); }
+inline float dcos(float deg) { return cosf(to_radians(deg)); }
 
-static float dsin(float deg) { return sinf(to_radians(deg)); }
-static float dcos(float deg) { return cosf(to_radians(deg)); }
-
-static float point_distance(float x1, float y1, float x2, float y2) {
+inline float point_distance(float x1, float y1, float x2, float y2) {
 	float dx = x2 - x1;
 	float dy = y2 - y1;
 	return sqrtf(dx * dx + dy * dy);
 }
 
-static float point_direction(float x1, float y1, float x2, float y2) {
+inline float point_direction(float x1, float y1, float x2, float y2) {
 	return to_degrees(atan2f(y1 - y2, x2 - x1));
 }
 
-static bool circle_vs_circle(float x1, float y1, float r1, float x2, float y2, float r2) {
+inline bool circle_vs_circle(float x1, float y1, float r1, float x2, float y2, float r2) {
 	float dx = x2 - x1;
 	float dy = y2 - y1;
 	float r = r1 + r2;
 	return (dx * dx + dy * dy) < (r * r);
 }
 
-static bool circle_vs_rotated_rect(float circle_x, float circle_y, float circle_radius,
+inline bool circle_vs_rotated_rect(float circle_x, float circle_y, float circle_radius,
 								   float rect_center_x, float rect_center_y, float rect_w, float rect_h, float rect_dir) {
 	float dx = circle_x - rect_center_x;
 	float dy = circle_y - rect_center_y;
@@ -263,15 +294,15 @@ static bool circle_vs_rotated_rect(float circle_x, float circle_y, float circle_
 	return (dx * dx + dy * dy) < (circle_radius * circle_radius);
 }
 
-static float lengthdir_x(float len, float dir) { return  dcos(dir) * len; }
-static float lengthdir_y(float len, float dir) { return -dsin(dir) * len; }
+inline float lengthdir_x(float len, float dir) { return  dcos(dir) * len; }
+inline float lengthdir_y(float len, float dir) { return -dsin(dir) * len; }
 
-static float wrapf(float a, float b) {
+inline float wrapf(float a, float b) {
 	return fmodf((fmodf(a, b) + b), b);
 }
 
 template <typename T>
-static T wrap(T a, T b) {
+inline T wrap(T a, T b) {
 	return ((a % b) + b) % b;
 }
 
@@ -289,7 +320,7 @@ static T wrap(T a, T b) {
 
 #define is_power_of_two(x) ((x) != 0 && ((x) & ((x) - 1)) == 0)
 
-static uintptr_t align_forward(uintptr_t ptr, size_t align) {
+inline uintptr_t align_forward(uintptr_t ptr, size_t align) {
 	Assert(is_power_of_two(align));
 	return (ptr + (align - 1)) & ~(align - 1);
 }
@@ -302,7 +333,7 @@ struct Arena {
 	size_t capacity;
 };
 
-static Arena arena_create(size_t capacity) {
+inline Arena arena_create(size_t capacity) {
 	Arena a = {};
 	a.data     = (u8*) malloc(capacity);
 	a.capacity = capacity;
@@ -312,12 +343,12 @@ static Arena arena_create(size_t capacity) {
 	return a;
 }
 
-static void arena_destroy(Arena* a) {
+inline void arena_destroy(Arena* a) {
 	free(a->data);
 	*a = {};
 }
 
-static u8* arena_push(Arena* a, size_t size, size_t alignment = Arena::DEFAULT_ALIGNMENT) {
+inline u8* arena_push(Arena* a, size_t size, size_t alignment = Arena::DEFAULT_ALIGNMENT) {
 	uintptr_t curr_ptr = (uintptr_t)a->data + (uintptr_t)a->count;
 	uintptr_t offset = align_forward(curr_ptr, alignment);
 	offset -= (uintptr_t)a->data;
@@ -330,7 +361,7 @@ static u8* arena_push(Arena* a, size_t size, size_t alignment = Arena::DEFAULT_A
 	return ptr;
 }
 
-static Arena arena_create_from_arena(Arena* arena, size_t capacity) {
+inline Arena arena_create_from_arena(Arena* arena, size_t capacity) {
 	Arena a = {};
 	a.data     = arena_push(arena, capacity);
 	a.capacity = capacity;
@@ -366,7 +397,7 @@ struct array {
 // @Todo: Come up with a cleanup strategy
 // 
 template <typename T>
-struct dynamic_array_cap {
+struct bump_array {
 	T*     data;
 	size_t count;
 	size_t capacity;
@@ -378,8 +409,8 @@ struct dynamic_array_cap {
 };
 
 template <typename T>
-static dynamic_array_cap<T> dynamic_array_cap_from_arena(Arena* a, size_t capacity) {
-	dynamic_array_cap<T> arr = {};
+inline bump_array<T> bump_array_from_arena(Arena* a, size_t capacity) {
+	bump_array<T> arr = {};
 	arr.data      = (T*) arena_push(a, capacity * sizeof(T));
 	arr.capacity = capacity;
 
@@ -387,7 +418,7 @@ static dynamic_array_cap<T> dynamic_array_cap_from_arena(Arena* a, size_t capaci
 }
 
 template <typename T>
-static T* array_add(dynamic_array_cap<T>* arr, const T& val) {
+inline T* array_add(bump_array<T>* arr, const T& val) {
 	Assert(arr->count <= arr->capacity);
 
 	if (arr->count == arr->capacity) {
@@ -402,7 +433,7 @@ static T* array_add(dynamic_array_cap<T>* arr, const T& val) {
 }
 
 template <typename T>
-static T* array_remove(dynamic_array_cap<T>* arr, T* it) {
+inline T* array_remove(bump_array<T>* arr, T* it) {
 	Assert(it >= arr->begin());
 	Assert(it <  arr->end());
 
@@ -415,10 +446,10 @@ static T* array_remove(dynamic_array_cap<T>* arr, T* it) {
 }
 
 template <typename T>
-static T* array_insert(dynamic_array_cap<T>* arr, size_t index, const T& val) {
+inline T* array_insert(bump_array<T>* arr, size_t index, const T& val) {
 	Assert(arr->count <= arr->capacity);
 
-	//Assert(index >= 0);
+	Assert(index >= 0); // for when I switch to signed sizes
 	Assert(index <= arr->count);
 
 	if (arr->count == arr->capacity) {
@@ -458,7 +489,7 @@ struct string {
 	template <size_t N>
 	string(const char (&arr)[N]) : data((char*) &arr[0]), count(N - 1) {}
 
-	string(dynamic_array_cap<char> arr) : data(arr.data), count(arr.count) {}
+	string(bump_array<char> arr) : data(arr.data), count(arr.count) {}
 
 	char& operator[](size_t i)       { Assert(i < count); return data[i]; }
 	char  operator[](size_t i) const { Assert(i < count); return data[i]; }
@@ -478,27 +509,27 @@ struct string {
 	}
 };
 
-static bool is_whitespace(char ch) {
+inline bool is_whitespace(char ch) {
 	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 }
 
-static bool is_numeric(char ch) {
+inline bool is_numeric(char ch) {
 	return ch >= '0' && ch <= '9';
 }
 
-static void advance(string* str, size_t i = 1) {
+inline void advance(string* str, size_t i = 1) {
 	i = min(i, str->count);
 	str->count -= i;
 	str->data  += i;
 }
 
-static void eat_whitespace(string* str) {
+inline void eat_whitespace(string* str) {
 	while (str->count > 0 && is_whitespace(*str->data)) {
 		advance(str);
 	}
 }
 
-static string eat_non_whitespace(string* str) {
+inline string eat_non_whitespace(string* str) {
 	string result = {str->data, 0};
 
 	while (str->count > 0 && !is_whitespace(*str->data)) {
@@ -509,7 +540,7 @@ static string eat_non_whitespace(string* str) {
 	return result;
 }
 
-static string eat_numeric(string* str) {
+inline string eat_numeric(string* str) {
 	string result = {str->data, 0};
 
 	while (str->count > 0 && is_numeric(*str->data)) {
@@ -520,7 +551,7 @@ static string eat_numeric(string* str) {
 	return result;
 }
 
-static string eat_line(string* str) {
+inline string eat_line(string* str) {
 	string result = {str->data, 0};
 
 	while (str->count > 0 && *str->data != '\n') {
@@ -536,7 +567,7 @@ static string eat_line(string* str) {
 	return result;
 }
 
-static u32 string_to_u32(string str, bool* done = nullptr) {
+inline u32 string_to_u32(string str, bool* done = nullptr) {
 	if (str.count == 0) {
 		if (done) *done = false;
 		return 0;
@@ -558,7 +589,7 @@ static u32 string_to_u32(string str, bool* done = nullptr) {
 	return result;
 }
 
-static float string_to_f32(string str, bool* done = nullptr) {
+inline float string_to_f32(string str, bool* done = nullptr) {
 	if (str.count == 0) {
 		if (done) *done = false;
 		return 0;
@@ -608,7 +639,7 @@ static float string_to_f32(string str, bool* done = nullptr) {
 }
 
 template <size_t N>
-static string Sprintf(char (&buf)[N], const char* fmt, ...) {
+inline string Sprintf(char (&buf)[N], const char* fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
 
@@ -623,7 +654,7 @@ static string Sprintf(char (&buf)[N], const char* fmt, ...) {
 
 
 // You have to free() the C string
-static char* to_c_string(string str) {
+inline char* to_c_string(string str) {
 	char* c_str = (char*) malloc(str.count + 1);
 	Assert(c_str);
 	memcpy(c_str, str.data, str.count);
@@ -633,7 +664,7 @@ static char* to_c_string(string str) {
 
 
 // You have to free() string.data
-static string copy_string(string str) {
+inline string copy_string(string str) {
 	if (str.count == 0) return {};
 
 	string result;
