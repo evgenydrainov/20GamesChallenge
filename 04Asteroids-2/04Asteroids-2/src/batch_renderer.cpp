@@ -2,30 +2,7 @@
 
 #include "package.h"
 
-enum RenderMode {
-	MODE_NONE,
-	MODE_QUADS,
-	MODE_TRIANGLES,
-};
-
-static u32 current_texture = 0;
-static RenderMode current_mode = MODE_NONE;
-static bump_array<Vertex> batch_vertices = {};
-
-static u32 texture_shader;
-// static u32 color_shader;
-
-static u32 batch_vao;
-static u32 batch_vbo;
-static u32 batch_ebo;
-static u32 stub_texture;
-
-mat4 proj_mat = {1};
-mat4 view_mat = {1};
-mat4 model_mat = {1};
-
-static int draw_calls = 0;
-static size_t max_batch = 0;
+Batch_Renderer renderer = {};
 
 
 static char texture_vert_shader_src[] = R"(
@@ -92,15 +69,15 @@ void init_renderer() {
 	// Initialize.
 	// 
 	{
-		glGenVertexArrays(1, &batch_vao);
-		glGenBuffers(1, &batch_vbo);
-		glGenBuffers(1, &batch_ebo);
+		glGenVertexArrays(1, &renderer.batch_vao);
+		glGenBuffers(1, &renderer.batch_vbo);
+		glGenBuffers(1, &renderer.batch_ebo);
 
 		// 1. bind Vertex Array Object
-		glBindVertexArray(batch_vao);
+		glBindVertexArray(renderer.batch_vao);
 
 		// 2. copy our vertices array in a vertex buffer for OpenGL to use
-		glBindBuffer(GL_ARRAY_BUFFER, batch_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, renderer.batch_vbo);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * BATCH_MAX_VERTICES, nullptr, GL_DYNAMIC_DRAW);
 
 		u32* indices = (u32*) malloc(BATCH_MAX_INDICES * sizeof(u32));
@@ -120,7 +97,7 @@ void init_renderer() {
 		}
 
 		// 3. copy our index array in a element buffer for OpenGL to use
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch_ebo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer.batch_ebo);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u32) * BATCH_MAX_INDICES, indices, GL_STATIC_DRAW);
 
 		// 4. then set the vertex attributes pointers
@@ -128,12 +105,12 @@ void init_renderer() {
 
 		glBindVertexArray(0);
 
-		batch_vertices.data = (Vertex*) malloc(BATCH_MAX_VERTICES * sizeof(Vertex));
-		batch_vertices.capacity = BATCH_MAX_VERTICES;
+		renderer.batch_vertices.data = (Vertex*) malloc(BATCH_MAX_VERTICES * sizeof(Vertex));
+		renderer.batch_vertices.capacity = BATCH_MAX_VERTICES;
 
 		// stub texture
-		glGenTextures(1, &stub_texture);
-		glBindTexture(GL_TEXTURE_2D, stub_texture);
+		glGenTextures(1, &renderer.stub_texture);
+		glBindTexture(GL_TEXTURE_2D, renderer.stub_texture);
 
 		u32 pixel_data[1] = {0xffffffff};
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel_data);
@@ -189,82 +166,82 @@ void init_renderer() {
 		u32 texture_frag_shader = compile_shader(GL_FRAGMENT_SHADER, texture_frag_shader_src);
 		defer { glDeleteShader(texture_frag_shader); };
 
-		texture_shader = link_program(texture_vert_shader,texture_frag_shader);
+		renderer.texture_shader = link_program(texture_vert_shader,texture_frag_shader);
 	}
 }
 
 void deinit_renderer() {
-	free(batch_vertices.data);
+	free(renderer.batch_vertices.data);
 }
 
 void break_batch() {
-	if (batch_vertices.count == 0) {
+	if (renderer.batch_vertices.count == 0) {
 		return;
 	}
 
-	Assert(current_mode != MODE_NONE);
+	Assert(renderer.current_mode != MODE_NONE);
 
 	{
-		glBindBuffer(GL_ARRAY_BUFFER, batch_vbo);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, batch_vertices.count * sizeof(Vertex), batch_vertices.data);
+		glBindBuffer(GL_ARRAY_BUFFER, renderer.batch_vbo);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, renderer.batch_vertices.count * sizeof(Vertex), renderer.batch_vertices.data);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
-	switch (current_mode) {
+	switch (renderer.current_mode) {
 		case MODE_QUADS: {
-			u32 program = texture_shader;
+			u32 program = renderer.texture_shader;
 
 			glUseProgram(program);
 			defer { glUseProgram(0); };
 
-			mat4 MVP = (proj_mat * view_mat) * model_mat;
+			mat4 MVP = (renderer.proj_mat * renderer.view_mat) * renderer.model_mat;
 
 			int u_MVP = glGetUniformLocation(program, "u_MVP");
 			glUniformMatrix4fv(u_MVP, 1, GL_FALSE, &MVP[0][0]);
 
-			glBindTexture(GL_TEXTURE_2D, current_texture);
+			glBindTexture(GL_TEXTURE_2D, renderer.current_texture);
 			defer { glBindTexture(GL_TEXTURE_2D, 0); };
 
-			glBindVertexArray(batch_vao);
+			glBindVertexArray(renderer.batch_vao);
 			defer { glBindVertexArray(0); };
 
-			Assert(batch_vertices.count % 4 == 0);
+			Assert(renderer.batch_vertices.count % 4 == 0);
 
-			glDrawElements(GL_TRIANGLES, (GLsizei)batch_vertices.count / 4 * 6, GL_UNSIGNED_INT, 0);
-			draw_calls++;
-			max_batch = max(max_batch, batch_vertices.count);
+			glDrawElements(GL_TRIANGLES, (GLsizei)renderer.batch_vertices.count / 4 * 6, GL_UNSIGNED_INT, 0);
+			renderer.draw_calls++;
+			renderer.max_batch = max(renderer.max_batch, renderer.batch_vertices.count);
 			break;
 		}
 
 		case MODE_TRIANGLES: {
-			u32 program = texture_shader;
+			u32 program = renderer.texture_shader;
 
 			glUseProgram(program);
 			defer { glUseProgram(0); };
 
-			mat4 MVP = (proj_mat * view_mat) * model_mat;
+			mat4 MVP = (renderer.proj_mat * renderer.view_mat) * renderer.model_mat;
 
 			int u_MVP = glGetUniformLocation(program, "u_MVP");
 			glUniformMatrix4fv(u_MVP, 1, GL_FALSE, &MVP[0][0]);
 
-			glBindTexture(GL_TEXTURE_2D, stub_texture);
+			glBindTexture(GL_TEXTURE_2D, renderer.stub_texture); // use stub texture to draw shapes
 			defer { glBindTexture(GL_TEXTURE_2D, 0); };
 
-			glBindVertexArray(batch_vao);
+			glBindVertexArray(renderer.batch_vao);
 			defer { glBindVertexArray(0); };
 
-			Assert(batch_vertices.count % 3 == 0);
+			Assert(renderer.batch_vertices.count % 3 == 0);
 
-			glDrawArrays(GL_TRIANGLES, 0, (GLsizei)batch_vertices.count);
-			draw_calls++;
-			max_batch = max(max_batch, batch_vertices.count);
+			glDrawArrays(GL_TRIANGLES, 0, (GLsizei)renderer.batch_vertices.count);
+			renderer.draw_calls++;
+			renderer.max_batch = max(renderer.max_batch, renderer.batch_vertices.count);
 			break;
 		}
 	}
 
-	batch_vertices.count = 0;
-	current_texture = 0;
-	current_mode = MODE_NONE;
+	renderer.batch_vertices.count = 0;
+	renderer.current_texture = 0;
+	renderer.current_mode = MODE_NONE;
 }
 
 
@@ -276,11 +253,11 @@ void draw_texture(Texture t, Rect src,
 		src.h = t.height;
 	}
 
-	if (t.ID != current_texture || current_mode != MODE_QUADS) {
+	if (t.ID != renderer.current_texture || renderer.current_mode != MODE_QUADS) {
 		break_batch();
 
-		current_texture = t.ID;
-		current_mode = MODE_QUADS;
+		renderer.current_texture = t.ID;
+		renderer.current_mode = MODE_QUADS;
 	}
 
 	{
@@ -323,15 +300,15 @@ void draw_texture(Texture t, Rect src,
 		vertices[2].pos = model * vec4{vertices[2].pos, 1.0f};
 		vertices[3].pos = model * vec4{vertices[3].pos, 1.0f};
 
-		array_add(&batch_vertices, vertices[0]);
-		array_add(&batch_vertices, vertices[1]);
-		array_add(&batch_vertices, vertices[2]);
-		array_add(&batch_vertices, vertices[3]);
+		array_add(&renderer.batch_vertices, vertices[0]);
+		array_add(&renderer.batch_vertices, vertices[1]);
+		array_add(&renderer.batch_vertices, vertices[2]);
+		array_add(&renderer.batch_vertices, vertices[3]);
 	}
 }
 
 void draw_rectangle(Rectf rect, vec4 color) {
-	Texture t = {stub_texture, 1, 1};
+	Texture t = {renderer.stub_texture, 1, 1};
 	vec2 pos = {rect.x, rect.y};
 	vec2 scale = {rect.w, rect.h};
 	draw_texture(t, {}, pos, scale, {}, 0, color);
@@ -339,7 +316,7 @@ void draw_rectangle(Rectf rect, vec4 color) {
 
 void draw_rectangle(Rectf rect, vec2 scale,
 					vec2 origin, float angle, vec4 color) {
-	Texture t = {stub_texture, 1, 1};
+	Texture t = {renderer.stub_texture, 1, 1};
 	vec2 pos = {rect.x, rect.y};
 
 	origin.x /= rect.w;
@@ -352,9 +329,9 @@ void draw_rectangle(Rectf rect, vec2 scale,
 }
 
 void draw_triangle(vec2 p1, vec2 p2, vec2 p3, vec4 color) {
-	if (current_mode != MODE_TRIANGLES) {
+	if (renderer.current_mode != MODE_TRIANGLES) {
 		break_batch();
-		current_mode = MODE_TRIANGLES;
+		renderer.current_mode = MODE_TRIANGLES;
 	}
 
 	{
@@ -364,9 +341,9 @@ void draw_triangle(vec2 p1, vec2 p2, vec2 p3, vec4 color) {
 			{{p3.x, p3.y, 0.0f}, {}, color, {}},
 		};
 
-		array_add(&batch_vertices, vertices[0]);
-		array_add(&batch_vertices, vertices[1]);
-		array_add(&batch_vertices, vertices[2]);
+		array_add(&renderer.batch_vertices, vertices[0]);
+		array_add(&renderer.batch_vertices, vertices[1]);
+		array_add(&renderer.batch_vertices, vertices[2]);
 	}
 }
 

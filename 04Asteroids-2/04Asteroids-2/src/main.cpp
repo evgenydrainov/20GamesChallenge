@@ -6,7 +6,7 @@
 
 
 int main(int argc, char* argv[]) {
-	init_window_and_opengl("Asteroids", GAME_W, GAME_H, true);
+	init_window_and_opengl("Asteroids", GAME_W, GAME_H, 2, true);
 	defer { deinit_window_and_opengl(); };
 
 	init_package();
@@ -15,8 +15,10 @@ int main(int argc, char* argv[]) {
 	init_renderer();
 	defer { deinit_renderer(); };
 
-	init_game();
-	defer { deinit_game(); };
+	Game game = {};
+
+	game.init();
+	defer { game.deinit(); };
 
 	while (!should_quit) {
 		SDL_Event ev;
@@ -26,21 +28,34 @@ int main(int argc, char* argv[]) {
 
 		float delta = 1;
 
-		update_game(delta);
+		game.update(delta);
+
+		renderer.draw_calls = 0;
+		renderer.max_batch = 0;
 
 		vec4 clear_color = get_color(0x6495edff);
-
 		glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		int backbuffer_width;
-		int backbuffer_height;
-		SDL_GL_GetDrawableSize(window, &backbuffer_width, &backbuffer_height);
+		// scale to fit
+		{
+			int backbuffer_width;
+			int backbuffer_height;
+			SDL_GL_GetDrawableSize(window, &backbuffer_width, &backbuffer_height);
 
-		glViewport(0, 0, backbuffer_width, backbuffer_height);
-		proj_mat = glm::ortho<float>(0, GAME_W, GAME_H, 0);
+			float xscale = backbuffer_width  / (float)GAME_W;
+			float yscale = backbuffer_height / (float)GAME_H;
+			float scale = min(xscale, yscale);
 
-		draw_game(delta);
+			int w = (int) (GAME_W * scale);
+			int h = (int) (GAME_H * scale);
+			int x = (backbuffer_width  - w) / 2;
+			int y = (backbuffer_height - h) / 2;
+
+			glViewport(x, y, w, h);
+		}
+
+		game.draw(delta);
 
 		break_batch();
 

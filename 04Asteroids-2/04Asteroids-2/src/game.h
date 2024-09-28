@@ -1,10 +1,30 @@
 #pragma once
 
+#include "batch_renderer.h"
+
 #define GAME_W 640
 #define GAME_H 480
 
-void init_game();
-void deinit_game();
+struct Player {
+	float x;
+	float y;
+	float hsp;
+	float vsp;
+	float dir;
+};
 
-void update_game(float delta);
-void draw_game(float delta);
+struct Game {
+	Player player;
+
+	float camera_x;
+	float camera_y;
+	float camera_zoom = 1;
+
+	Texture player_texture;
+
+	void init();
+	void deinit();
+
+	void update(float delta);
+	void draw(float delta);
+};

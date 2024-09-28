@@ -225,11 +225,6 @@ inline T clamp(T a, T mn, T mx) {
 }
 
 template <typename T>
-inline void Clamp(T* a, T mn, T mx) {
-	*a = clamp(*a, mn, mx);
-}
-
-template <typename T>
 inline T lerp(T a, T b, float f) {
 	return a + (b - a) * f;
 }
@@ -305,6 +300,21 @@ template <typename T>
 inline T wrap(T a, T b) {
 	return ((a % b) + b) % b;
 }
+
+// 
+// One-Liners
+// 
+template <typename T>
+inline void Clamp(T* a, T mn, T mx) { *a = clamp(*a, mn, mx); }
+
+template <typename T>
+inline void Lerp(T* a, T b, float f) { *a = lerp(*a, b, f); }
+
+template <typename T>
+inline void Lerp_Delta(T* a, T b, float f, float delta) { *a = lerp_delta(*a, b, f, delta); }
+
+template <typename T>
+inline void Approach(T* start, T end, T shift) { *start = approach(*start, end, shift); }
 
 
 

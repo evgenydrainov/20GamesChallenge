@@ -7,7 +7,7 @@ extern SDL_GLContext gl_context;
 extern bool should_quit;
 
 void init_window_and_opengl(const char* title,
-							int width, int height,
+							int width, int height, int init_scale,
 							bool vsync);
 
 void deinit_window_and_opengl();

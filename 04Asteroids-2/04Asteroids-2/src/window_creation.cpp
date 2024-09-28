@@ -68,7 +68,7 @@ static void GLAPIENTRY gl_debug_callback(GLenum source,
 
 
 void init_window_and_opengl(const char* title,
-							int width, int height,
+							int width, int height, int init_scale,
 							bool vsync) {
 	// SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
@@ -81,7 +81,7 @@ void init_window_and_opengl(const char* title,
 
 	window = SDL_CreateWindow(title,
 							  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-							  width, height,
+							  width * init_scale, height * init_scale,
 							  SDL_WINDOW_OPENGL
 							  | SDL_WINDOW_RESIZABLE);
 
@@ -184,6 +184,8 @@ void swap_buffers() {
 bool is_key_pressed(SDL_Scancode key, bool repeat) {
 	bool result = false;
 
+	if (!(key >= 0 && key < NUM_KEYS)) return result;
+
 	/*if (!g->console.show)*/ {
 		result |= (key_pressed[key / 32] & (1 << (key % 32))) != 0;
 
@@ -197,6 +199,8 @@ bool is_key_pressed(SDL_Scancode key, bool repeat) {
 
 bool is_key_held(SDL_Scancode key) {
 	bool result = false;
+
+	if (!(key >= 0 && key < NUM_KEYS)) return result;
 
 	/*if (!g->console.show)*/ {
 		const u8* state = SDL_GetKeyboardState(nullptr);

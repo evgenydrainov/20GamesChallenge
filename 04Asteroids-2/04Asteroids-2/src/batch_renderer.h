@@ -28,9 +28,33 @@ struct Texture {
 	int height;
 };
 
-extern mat4 proj_mat;
-extern mat4 view_mat;
-extern mat4 model_mat;
+enum RenderMode {
+	MODE_NONE,
+	MODE_QUADS,
+	MODE_TRIANGLES,
+};
+
+struct Batch_Renderer {
+	u32 current_texture;
+	RenderMode current_mode;
+	bump_array<Vertex> batch_vertices;
+
+	u32 texture_shader;
+
+	u32 batch_vao;
+	u32 batch_vbo;
+	u32 batch_ebo;
+	u32 stub_texture;
+
+	mat4 proj_mat = {1};
+	mat4 view_mat = {1};
+	mat4 model_mat = {1};
+
+	int draw_calls;
+	size_t max_batch;
+};
+
+extern Batch_Renderer renderer;
 
 void init_renderer();
 void deinit_renderer();
@@ -41,11 +65,11 @@ void draw_texture(Texture t, Rect src = {},
 				  vec2 pos = {}, vec2 scale = {1, 1},
 				  vec2 origin = {}, float angle = 0, vec4 color = color_white, glm::bvec2 flip = {});
 
-void draw_rectangle(Rectf rect, vec4 color = color_white);
+void draw_rectangle(Rectf rect, vec4 color);
 
 void draw_rectangle(Rectf rect, vec2 scale,
-					vec2 origin = {}, float angle = 0, vec4 color = color_white);
+					vec2 origin, float angle, vec4 color);
 
-void draw_triangle(vec2 p1, vec2 p2, vec2 p3, vec4 color = color_white);
+void draw_triangle(vec2 p1, vec2 p2, vec2 p3, vec4 color);
 
-void draw_circle(vec2 pos, float radius, vec4 color = color_white, int precision = 12);
+void draw_circle(vec2 pos, float radius, vec4 color, int precision = 12);
