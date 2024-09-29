@@ -29,9 +29,9 @@ include_directories(${PROJECT_NAME} ${SDL2_INCLUDE_DIRS})
 set(SOURCES
 	src/batch_renderer.cpp
 	src/game.cpp
-	src/loading_textures.cpp
 	src/main.cpp
 	src/package.cpp
+	src/texture.cpp
 	src/window_creation.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})

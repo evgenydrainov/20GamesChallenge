@@ -1,4 +1,4 @@
-#include "loading_textures.h"
+#include "texture.h"
 
 #include "package.h"
 #include <stb/stb_image.h>

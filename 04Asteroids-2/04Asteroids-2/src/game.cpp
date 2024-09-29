@@ -1,7 +1,7 @@
 #include "game.h"
 
-#include "loading_textures.h"
 #include "window_creation.h"
+#include "batch_renderer.h"
 
 void Game::init() {
 	player_texture = load_texture_from_file("textures/player.png");

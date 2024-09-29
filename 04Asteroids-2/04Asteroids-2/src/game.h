@@ -1,6 +1,6 @@
 #pragma once
 
-#include "batch_renderer.h"
+#include "texture.h"
 
 #define GAME_W 640
 #define GAME_H 480

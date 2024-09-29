@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.h"
+#include "texture.h"
 
 constexpr size_t BATCH_MAX_QUADS    = 10'000;
 constexpr size_t VERTICES_PER_QUAD  = 4;
@@ -20,12 +21,6 @@ struct Vertex {
 	vec3 normal;
 	vec4 color;
 	vec2 uv;
-};
-
-struct Texture {
-	u32 ID;
-	int width;
-	int height;
 };
 
 enum RenderMode {
