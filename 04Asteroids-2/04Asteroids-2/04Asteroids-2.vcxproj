@@ -193,7 +193,7 @@ copy /Y "$(SolutionDir)external\SDL2_mixer\lib\$(PlatformTarget)\SDL2_mixer.dll"
   <ItemGroup>
     <ClCompile Include="src\batch_renderer.cpp" />
     <ClCompile Include="src\game.cpp" />
-    <ClCompile Include="src\loading_textures.cpp" />
+    <ClCompile Include="src\texture.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\package.cpp" />
     <ClCompile Include="src\stdafx.cpp">
@@ -208,7 +208,7 @@ copy /Y "$(SolutionDir)external\SDL2_mixer\lib\$(PlatformTarget)\SDL2_mixer.dll"
     <ClInclude Include="src\batch_renderer.h" />
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\game.h" />
-    <ClInclude Include="src\loading_textures.h" />
+    <ClInclude Include="src\texture.h" />
     <ClInclude Include="src\package.h" />
     <ClInclude Include="src\stdafx.h" />
     <ClInclude Include="src\window_creation.h" />
