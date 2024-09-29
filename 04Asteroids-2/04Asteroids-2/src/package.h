@@ -2,6 +2,14 @@
 
 #include "common.h"
 
+struct Package {
+	static constexpr size_t MAX_FILESIZE = Megabytes(10);
+
+	u8* filedata;
+};
+
+extern Package package;
+
 void init_package();
 void deinit_package();
 

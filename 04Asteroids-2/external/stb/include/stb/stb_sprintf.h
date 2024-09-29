@@ -207,13 +207,25 @@ typedef char *STBSP_SPRINTFCB(const char *buf, void *user, int len);
 #define STB_SPRINTF_DECORATE(name) stbsp_##name // define this before including if you want to change the names
 #endif
 
+#ifdef _MSC_VER
+STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(vsprintf)(char *buf,
+                                                    _In_z_ _Printf_format_string_ char const *fmt,
+                                                    va_list va);
+STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(vsnprintf)(_Out_z_cap_(count) char *buf,
+                                                     int count,
+                                                     _In_z_ _Printf_format_string_ char const *fmt,
+                                                     va_list va);
+STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(sprintf)(char *buf,
+                                                   _In_z_ _Printf_format_string_ char const *fmt,
+                                                   ...);
+STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(snprintf)(_Out_z_cap_(count) char *buf,
+                                                    int count,
+                                                    _In_z_ _Printf_format_string_ char const *fmt,
+                                                    ...);
+#else
 STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(vsprintf)(char *buf, char const *fmt, va_list va);
 STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(vsnprintf)(char *buf, int count, char const *fmt, va_list va);
 STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(sprintf)(char *buf, char const *fmt, ...) STBSP__ATTRIBUTE_FORMAT(2,3);
-
-#ifdef _MSC_VER
-STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(snprintf)(_Out_z_cap_(count) char *buf, int count, _Printf_format_string_ char const *fmt, ...);
-#else
 STBSP__PUBLICDEC int STB_SPRINTF_DECORATE(snprintf)(char *buf, int count, char const *fmt, ...) STBSP__ATTRIBUTE_FORMAT(3,4);
 #endif
 

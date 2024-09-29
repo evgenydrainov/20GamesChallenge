@@ -52,12 +52,18 @@ struct Batch_Renderer {
 
 	int draw_calls;
 	size_t max_batch;
+
+	int curr_draw_calls;
+	size_t curr_max_batch;
 };
 
 extern Batch_Renderer renderer;
 
 void init_renderer();
 void deinit_renderer();
+
+void render_begin_frame(vec4 clear_color);
+void render_end_frame();
 
 void break_batch();
 

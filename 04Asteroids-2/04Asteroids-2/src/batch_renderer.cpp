@@ -1,6 +1,7 @@
 #include "batch_renderer.h"
 
 #include "package.h"
+#include "window_creation.h"
 
 Batch_Renderer renderer = {};
 
@@ -166,12 +167,47 @@ void init_renderer() {
 		u32 texture_frag_shader = compile_shader(GL_FRAGMENT_SHADER, texture_frag_shader_src);
 		defer { glDeleteShader(texture_frag_shader); };
 
-		renderer.texture_shader = link_program(texture_vert_shader,texture_frag_shader);
+		renderer.texture_shader = link_program(texture_vert_shader, texture_frag_shader);
 	}
 }
 
 void deinit_renderer() {
 	free(renderer.batch_vertices.data);
+}
+
+void render_begin_frame(vec4 clear_color) {
+	Assert(renderer.batch_vertices.count == 0);
+
+	renderer.draw_calls = renderer.curr_draw_calls;
+	renderer.max_batch  = renderer.curr_max_batch;
+
+	renderer.curr_draw_calls = 0;
+	renderer.curr_max_batch  = 0;
+
+	glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	// scale to fit
+	{
+		int backbuffer_width;
+		int backbuffer_height;
+		SDL_GL_GetDrawableSize(window.handle, &backbuffer_width, &backbuffer_height);
+
+		float xscale = backbuffer_width  / (float)window.game_width;
+		float yscale = backbuffer_height / (float)window.game_height;
+		float scale = min(xscale, yscale);
+
+		int w = (int) (window.game_width  * scale);
+		int h = (int) (window.game_height * scale);
+		int x = (backbuffer_width  - w) / 2;
+		int y = (backbuffer_height - h) / 2;
+
+		glViewport(x, y, w, h);
+	}
+}
+
+void render_end_frame() {
+	break_batch();
 }
 
 void break_batch() {
@@ -180,6 +216,7 @@ void break_batch() {
 	}
 
 	Assert(renderer.current_mode != MODE_NONE);
+	Assert(renderer.current_texture != 0);
 
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, renderer.batch_vbo);
@@ -208,8 +245,8 @@ void break_batch() {
 			Assert(renderer.batch_vertices.count % 4 == 0);
 
 			glDrawElements(GL_TRIANGLES, (GLsizei)renderer.batch_vertices.count / 4 * 6, GL_UNSIGNED_INT, 0);
-			renderer.draw_calls++;
-			renderer.max_batch = max(renderer.max_batch, renderer.batch_vertices.count);
+			renderer.curr_draw_calls++;
+			renderer.curr_max_batch = max(renderer.curr_max_batch, renderer.batch_vertices.count);
 			break;
 		}
 
@@ -224,7 +261,7 @@ void break_batch() {
 			int u_MVP = glGetUniformLocation(program, "u_MVP");
 			glUniformMatrix4fv(u_MVP, 1, GL_FALSE, &MVP[0][0]);
 
-			glBindTexture(GL_TEXTURE_2D, renderer.stub_texture); // use stub texture to draw shapes
+			glBindTexture(GL_TEXTURE_2D, renderer.current_texture);
 			defer { glBindTexture(GL_TEXTURE_2D, 0); };
 
 			glBindVertexArray(renderer.batch_vao);
@@ -233,8 +270,8 @@ void break_batch() {
 			Assert(renderer.batch_vertices.count % 3 == 0);
 
 			glDrawArrays(GL_TRIANGLES, 0, (GLsizei)renderer.batch_vertices.count);
-			renderer.draw_calls++;
-			renderer.max_batch = max(renderer.max_batch, renderer.batch_vertices.count);
+			renderer.curr_draw_calls++;
+			renderer.curr_max_batch = max(renderer.curr_max_batch, renderer.batch_vertices.count);
 			break;
 		}
 	}
@@ -329,8 +366,10 @@ void draw_rectangle(Rectf rect, vec2 scale,
 }
 
 void draw_triangle(vec2 p1, vec2 p2, vec2 p3, vec4 color) {
-	if (renderer.current_mode != MODE_TRIANGLES) {
+	if (renderer.current_texture != renderer.stub_texture || renderer.current_mode != MODE_TRIANGLES) {
 		break_batch();
+
+		renderer.current_texture = renderer.stub_texture;
 		renderer.current_mode = MODE_TRIANGLES;
 	}
 

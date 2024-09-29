@@ -62,34 +62,39 @@ struct Rectf {
 #ifdef NDEBUG
 	#define Assert(expr) while (!(expr)) panic_and_abort("Assertion Failed: " #expr)
 #else
-	#define Assert(expr) while (!(expr)) trigger_breakpoint()
+	#define Assert(expr) while (!(expr)) { try_to_exit_fullscreen_properly(); SDL_TriggerBreakpoint(); }
 #endif
 
-#define panic_and_abort(fmt, ...) do { \
-		char buf[512]; \
-		stb_snprintf(buf, sizeof(buf), __FILE__ ":" STRINGIFY(__LINE__) ": " fmt, ##__VA_ARGS__); \
-		log_error("%s", buf); \
-		try_to_exit_fullscreen_properly(); \
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", buf, window); \
-		SDL_Quit(); \
-		exit(1); \
-	} while (0)
+#define panic_and_abort(fmt, ...) _panic_and_abort(__FILE__ ":" STRINGIFY(__LINE__) ": " fmt, ##__VA_ARGS__)
 
-#define trigger_breakpoint() do { \
-		try_to_exit_fullscreen_properly(); \
-		SDL_TriggerBreakpoint(); \
-	} while (0)
-
-extern SDL_Window* window; // from window_creation.h
+extern SDL_Window* get_window_handle(); // defined in window_creation.h
 
 inline void try_to_exit_fullscreen_properly() {
 	// @Todo: Probably needed only for Windows
-	if (window) {
+	if (SDL_Window* window = get_window_handle()) {
 		SDL_SetWindowFullscreen(window, 0);
 		SDL_Event ev;
 		while (SDL_PollEvent(&ev)) {}
 	}
 }
+
+SDL_NORETURN inline void _panic_and_abort(const char* fmt, ...) {
+	char buf[512];
+
+	va_list va;
+	va_start(va, fmt);
+	stb_vsnprintf(buf, sizeof(buf), fmt, va);
+	va_end(va);
+
+	log_error("%s", buf);
+
+	try_to_exit_fullscreen_properly();
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", buf, get_window_handle());
+
+	SDL_Quit();
+	exit(1);
+}
+
 
 // 
 // For loop
@@ -98,7 +103,7 @@ inline void try_to_exit_fullscreen_properly() {
 #define For(it, arr)    for (auto it = arr.begin(); it != arr.end(); it++)
 #define Remove(it, arr) (it = array_remove(&arr, it), it--)
 
-#define Repeat(n)       for (int CONCAT(_i_, __LINE__) = (int)(n); CONCAT(_i_, __LINE__)--;)
+#define Repeat(n)       for (int CONCAT(_i__, __LINE__) = (int)(n); CONCAT(_i__, __LINE__)--;)
 
 #define CONCAT_INTERNAL(x, y) x##y
 #define CONCAT(x, y) CONCAT_INTERNAL(x, y)
@@ -127,7 +132,11 @@ public:
 	ExitScope<T> operator+(T t){ return t;}
 };
 
+#ifdef _MSC_VER
+#define defer __pragma(warning(push)) __pragma(warning(disable:4189)) const auto& CONCAT(_defer__, __LINE__) = ExitScopeHelp() + [&]() __pragma(warning(pop))
+#else
 #define defer const auto& CONCAT(_defer__, __LINE__) = ExitScopeHelp() + [&]()
+#endif
 
 // 
 // Automatically convert an enum to a string.
@@ -194,6 +203,15 @@ inline vec4 get_color(u32 rgba) {
 	result.g = ((rgba >> 16) & 0xFF) / 255.0f;
 	result.b = ((rgba >>  8) & 0xFF) / 255.0f;
 	result.a = ((rgba >>  0) & 0xFF) / 255.0f;
+	return result;
+}
+
+inline vec4 get_color_4bit(u16 rgba) {
+	vec4 result;
+	result.r = ((rgba >> 12) & 0xF) / 15.0f;
+	result.g = ((rgba >>  8) & 0xF) / 15.0f;
+	result.b = ((rgba >>  4) & 0xF) / 15.0f;
+	result.a = ((rgba >>  0) & 0xF) / 15.0f;
 	return result;
 }
 
@@ -393,10 +411,20 @@ struct array {
 	T*     data;
 	size_t count;
 
-	T& operator[](size_t i) { Assert(i < count); return data[i]; }
+	T& operator[](size_t i) {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
 
-	T* begin() { return data; }
-	T* end()   { return data + count; }
+	T operator[](size_t i) const {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
+
+	T* begin() const { return data; }
+	T* end()   const { return data + count; }
 };
 
 
@@ -404,18 +432,26 @@ struct array {
 // A dynamic array that doesn't grow when it runs out of capacity, but
 // replaces the last element.
 // 
-// @Todo: Come up with a cleanup strategy
-// 
 template <typename T>
 struct bump_array {
 	T*     data;
 	size_t count;
 	size_t capacity;
 
-	T& operator[](size_t i) { Assert(i < count); return data[i]; }
+	T& operator[](size_t i) {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
 
-	T* begin() { return data; }
-	T* end()   { return data + count; }
+	T operator[](size_t i) const {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
+
+	T* begin() const { return data; }
+	T* end()   const { return data + count; }
 };
 
 template <typename T>
@@ -435,8 +471,8 @@ inline T* array_add(bump_array<T>* arr, const T& val) {
 		arr->count--;
 	}
 
-	arr->data[arr->count] = val;
 	T* result = &arr->data[arr->count];
+	*result = val;
 	arr->count++;
 
 	return result;
@@ -472,8 +508,8 @@ inline T* array_insert(bump_array<T>* arr, size_t index, const T& val) {
 		arr->data[i + 1] = arr->data[i];
 	}
 
-	T* result = &(arr->data[index] = val);
-
+	T* result = &arr->data[index];
+	*result = val;
 	arr->count++;
 
 	return result;
@@ -501,10 +537,19 @@ struct string {
 
 	string(bump_array<char> arr) : data(arr.data), count(arr.count) {}
 
-	char& operator[](size_t i)       { Assert(i < count); return data[i]; }
-	char  operator[](size_t i) const { Assert(i < count); return data[i]; }
+	char& operator[](size_t i) {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
 
-	bool operator==(const string& other) {
+	char operator[](size_t i) const {
+		Assert(i >= 0);
+		Assert(i < count);
+		return data[i];
+	}
+
+	bool operator==(const string& other) const {
 		if (count != other.count) {
 			return false;
 		}

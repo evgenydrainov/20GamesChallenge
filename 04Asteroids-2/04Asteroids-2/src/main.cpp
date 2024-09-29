@@ -5,8 +5,8 @@
 #include "package.h"
 
 
-int main(int argc, char* argv[]) {
-	init_window_and_opengl("Asteroids", GAME_W, GAME_H, 2, true);
+int main(int /*argc*/, char* /*argv*/[]) {
+	init_window_and_opengl("Asteroids", GAME_W, GAME_H, 2, false, 60);
 	defer { deinit_window_and_opengl(); };
 
 	init_package();
@@ -20,44 +20,19 @@ int main(int argc, char* argv[]) {
 	game.init();
 	defer { game.deinit(); };
 
-	while (!should_quit) {
-		SDL_Event ev;
-		while (SDL_PollEvent(&ev)) {
-			handle_event(&ev);
-		}
+	window.prev_time = get_time() - 1.0 / window.target_fps;
 
-		float delta = 1;
+	while (!window.should_quit) {
+		begin_frame();
 
-		game.update(delta);
+		game.update(window.delta);
 
-		renderer.draw_calls = 0;
-		renderer.max_batch = 0;
+		vec4 clear_color = color_black; // get_color(0x6495edff);
+		render_begin_frame(clear_color);
 
-		vec4 clear_color = get_color(0x6495edff);
-		glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-		glClear(GL_COLOR_BUFFER_BIT);
+		game.draw(window.delta);
 
-		// scale to fit
-		{
-			int backbuffer_width;
-			int backbuffer_height;
-			SDL_GL_GetDrawableSize(window, &backbuffer_width, &backbuffer_height);
-
-			float xscale = backbuffer_width  / (float)GAME_W;
-			float yscale = backbuffer_height / (float)GAME_H;
-			float scale = min(xscale, yscale);
-
-			int w = (int) (GAME_W * scale);
-			int h = (int) (GAME_H * scale);
-			int x = (backbuffer_width  - w) / 2;
-			int y = (backbuffer_height - h) / 2;
-
-			glViewport(x, y, w, h);
-		}
-
-		game.draw(delta);
-
-		break_batch();
+		render_end_frame();
 
 		swap_buffers();
 	}
@@ -66,12 +41,17 @@ int main(int argc, char* argv[]) {
 }
 
 
+#pragma warning(push, 0)
+
+
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
 #undef STB_SPRINTF_IMPLEMENTATION
 
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#define STBI_NO_STDIO
 #include <stb/stb_image.h>
 #undef STB_IMAGE_IMPLEMENTATION
 
@@ -79,4 +59,7 @@ int main(int argc, char* argv[]) {
 #define GLAD_GL_IMPLEMENTATION
 #include <glad/gl.h>
 #undef GLAD_GL_IMPLEMENTATION
+
+
+#pragma warning(pop)
 

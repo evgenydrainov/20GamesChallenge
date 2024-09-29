@@ -14,9 +14,9 @@ void Game::deinit() {
 	
 }
 
-#define PLAYER_ACC      0.20f
-#define PLAYER_TURN_SPD 6.0f
-#define PLAYER_MAX_SPD  5.0f
+#define PLAYER_ACC      0.30f
+#define PLAYER_TURN_SPD 7.0f
+#define PLAYER_MAX_SPD  6.0f
 
 static void decelerate(float* hsp, float* vsp, float dec, float delta) {
 	float len = glm::length(vec2{*hsp, *vsp});
@@ -74,18 +74,50 @@ void Game::update(float delta) {
 		float target_x = player.x + lengthdir_x(50, player.dir);
 		float target_y = player.y + lengthdir_y(50, player.dir);
 
-		Lerp_Delta(&camera_x, target_x, 0.1f, delta);
-		Lerp_Delta(&camera_y, target_y, 0.1f, delta);
+		camera_x += player.hsp * delta;
+		camera_y += player.vsp * delta;
+
+		Lerp_Delta(&camera_x, target_x, 0.05f, delta);
+		Lerp_Delta(&camera_y, target_y, 0.05f, delta);
+	}
+
+	if (is_key_pressed(SDL_SCANCODE_F4, false)) {
+		set_fullscreen(!is_fullscreen());
 	}
 }
 
-void Game::draw(float delta) {
+void Game::draw(float /*delta*/) {
 	float camera_w = GAME_W / camera_zoom;
 	float camera_h = GAME_H / camera_zoom;
 
+	float camera_left = camera_x - camera_w / 2.0f;
+	float camera_top  = camera_y - camera_h / 2.0f;
+
 	break_batch();
 	renderer.proj_mat = glm::ortho<float>(0, camera_w, camera_h, 0);
-	renderer.view_mat = glm::translate(mat4{1}, vec3{-(camera_x - camera_w / 2.0f), -(camera_y - camera_h / 2.0f), 0});
+	renderer.view_mat = glm::translate(mat4{1}, vec3{-camera_left, -camera_top, 0});
+
+	{
+		const int size = 32;
+
+		int left = (int) floorf(camera_left / size);
+		int top  = (int) floorf(camera_top  / size);
+
+		int right  = left + (int) ceilf(camera_w / size);
+		int bottom = top  + (int) ceilf(camera_h / size);
+
+		for (int y = top; y <= bottom; y++) {
+			for (int x = left; x <= right; x++) {
+				vec4 color;
+				if ((x + y) % 2 == 0) {
+					color = get_color_4bit(0x002f);
+				} else {
+					color = get_color_4bit(0x001f);
+				}
+				draw_rectangle({x * (float)size, y * (float)size, size, size}, color);
+			}
+		}
+	}
 
 	draw_texture(player_texture, {}, {player.x, player.y}, {1, 1}, {player_texture.width / 2, player_texture.height / 2}, player.dir);
 

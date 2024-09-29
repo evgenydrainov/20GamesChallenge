@@ -1,13 +1,6 @@
 #include "window_creation.h"
 
-
-SDL_Window* window = nullptr;
-SDL_GLContext gl_context = nullptr;
-bool should_quit = false;
-
-constexpr int NUM_KEYS = SDL_SCANCODE_UP + 1;
-static u32 key_pressed[(NUM_KEYS + 31) / 32];
-static u32 key_repeat [(NUM_KEYS + 31) / 32];
+Window window;
 
 
 #ifdef _DEBUG
@@ -15,9 +8,9 @@ static void GLAPIENTRY gl_debug_callback(GLenum source,
 										 GLenum type,
 										 unsigned int id,
 										 GLenum severity,
-										 GLsizei length,
+										 GLsizei /*length*/,
 										 const char *message,
-										 const void *userParam) {
+										 const void * /*userParam*/) {
 	// ignore non-significant error/warning codes
 	// if (id == 131169 || id == 131185 || id == 131218 || id == 131204) {
 	// 	return;
@@ -69,7 +62,7 @@ static void GLAPIENTRY gl_debug_callback(GLenum source,
 
 void init_window_and_opengl(const char* title,
 							int width, int height, int init_scale,
-							bool vsync) {
+							bool vsync, double target_fps) {
 	// SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
 	SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "system");
@@ -79,13 +72,15 @@ void init_window_and_opengl(const char* title,
 		panic_and_abort("Couldn't initialize SDL: %s", SDL_GetError());
 	}
 
-	window = SDL_CreateWindow(title,
-							  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-							  width * init_scale, height * init_scale,
-							  SDL_WINDOW_OPENGL
-							  | SDL_WINDOW_RESIZABLE);
+	window.handle = SDL_CreateWindow(title,
+									 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+									 width * init_scale, height * init_scale,
+									 SDL_WINDOW_OPENGL
+									 | SDL_WINDOW_RESIZABLE);
+	window.game_width  = width;
+	window.game_height = height;
 
-	if (!window) {
+	if (!window.handle) {
 		panic_and_abort("Couldn't create window: %s", SDL_GetError());
 	}
 
@@ -97,7 +92,7 @@ void init_window_and_opengl(const char* title,
 #endif
 
 
-	SDL_SetWindowMinimumSize(window, width, height);
+	SDL_SetWindowMinimumSize(window.handle, width, height);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -107,8 +102,8 @@ void init_window_and_opengl(const char* title,
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 #endif
 
-	gl_context = SDL_GL_CreateContext(window);
-	SDL_GL_MakeCurrent(window, gl_context);
+	window.gl_context = SDL_GL_CreateContext(window.handle);
+	SDL_GL_MakeCurrent(window.handle, window.gl_context);
 
 	{
 		int version = gladLoadGL([](const char* name) {
@@ -135,6 +130,11 @@ void init_window_and_opengl(const char* title,
 	} else {
 		SDL_GL_SetSwapInterval(0);
 	}
+	window.vsync = vsync;
+	window.target_fps = target_fps;
+
+	Assert(target_fps != 0);
+	window.prev_time = get_time() - 1.0 / target_fps;
 
 	glDisable(GL_CULL_FACE);
 
@@ -145,11 +145,11 @@ void init_window_and_opengl(const char* title,
 }
 
 void deinit_window_and_opengl() {
-	SDL_GL_DeleteContext(gl_context);
-	gl_context = nullptr;
+	SDL_GL_DeleteContext(window.gl_context);
+	window.gl_context = nullptr;
 
-	SDL_DestroyWindow(window);
-	window = nullptr;
+	SDL_DestroyWindow(window.handle);
+	window.handle = nullptr;
 
 	SDL_Quit();
 }
@@ -157,18 +157,27 @@ void deinit_window_and_opengl() {
 void handle_event(SDL_Event* ev) {
 	switch (ev->type) {
 		case SDL_QUIT: {
-			should_quit = true;
+			window.should_quit = true;
 			break;
 		}
 
 		case SDL_KEYDOWN: {
 			SDL_Scancode scancode = ev->key.keysym.scancode;
 
-			if (scancode >= 0 && scancode < NUM_KEYS) {
-				if (ev->key.repeat) {
-					key_repeat[scancode / 32] |= 1 << (scancode % 32);
-				} else {
-					key_pressed[scancode / 32] |= 1 << (scancode % 32);
+			if (scancode >= 0 && scancode < window.NUM_KEYS) {
+				bool ignore = false;
+
+				// ignore alt+f4
+				if (scancode == SDL_SCANCODE_F4 && (ev->key.keysym.mod & KMOD_ALT)) {
+					ignore = true;
+				}
+
+				if (!ignore) {
+					if (ev->key.repeat) {
+						window.key_repeat[scancode / 32] |= 1 << (scancode % 32);
+					} else {
+						window.key_pressed[scancode / 32] |= 1 << (scancode % 32);
+					}
 				}
 			}
 			break;
@@ -176,21 +185,61 @@ void handle_event(SDL_Event* ev) {
 	}
 }
 
+void begin_frame() {
+	double time = get_time();
+
+	Assert(window.target_fps != 0);
+	window.frame_end_time = time + (1.0 / window.target_fps);
+
+	window.delta = (float)((time - window.prev_time) * 60.0);
+
+	// 
+	// Clamp fps between (target_fps / 2, target_fps * 2) for now
+	// 
+	float min_delta = (float) (60.0 / (window.target_fps * 2.0));
+	float max_delta = (float) (60.0 / (window.target_fps / 2.0));
+	Clamp(&window.delta, min_delta, max_delta);
+
+	window.fps = (float)(1.0 / (time - window.prev_time));
+
+	window.prev_time = time;
+
+	memset(window.key_pressed, 0, sizeof(window.key_pressed));
+	memset(window.key_repeat,  0, sizeof(window.key_repeat));
+
+	SDL_Event ev;
+	while (SDL_PollEvent(&ev)) {
+		handle_event(&ev);
+	}
+}
+
 void swap_buffers() {
-	SDL_GL_SwapWindow(window);
+	SDL_GL_SwapWindow(window.handle);
+
+	if (!window.vsync) {
+		double time_left = window.frame_end_time - get_time();
+
+		if (time_left > 0.0) {
+			double sleep_time = time_left * 0.95;
+			SDL_Delay((u32)(sleep_time * 1000.0));
+
+			// spinlock
+			while (get_time() < window.frame_end_time) {}
+		}
+	}
 }
 
 
 bool is_key_pressed(SDL_Scancode key, bool repeat) {
 	bool result = false;
 
-	if (!(key >= 0 && key < NUM_KEYS)) return result;
+	if (!(key >= 0 && key < window.NUM_KEYS)) return result;
 
 	/*if (!g->console.show)*/ {
-		result |= (key_pressed[key / 32] & (1 << (key % 32))) != 0;
+		result |= (window.key_pressed[key / 32] & (1 << (key % 32))) != 0;
 
 		if (repeat) {
-			result |= (key_repeat[key / 32] & (1 << (key % 32))) != 0;
+			result |= (window.key_repeat[key / 32] & (1 << (key % 32))) != 0;
 		}
 	}
 
@@ -200,7 +249,7 @@ bool is_key_pressed(SDL_Scancode key, bool repeat) {
 bool is_key_held(SDL_Scancode key) {
 	bool result = false;
 
-	if (!(key >= 0 && key < NUM_KEYS)) return result;
+	if (!(key >= 0 && key < window.NUM_KEYS)) return result;
 
 	/*if (!g->console.show)*/ {
 		const u8* state = SDL_GetKeyboardState(nullptr);
@@ -209,4 +258,29 @@ bool is_key_held(SDL_Scancode key) {
 	}
 
 	return result;
+}
+
+SDL_Window* get_window_handle() {
+	return window.handle;
+}
+
+void set_fullscreen(bool fullscreen) {
+	if (fullscreen) {
+		SDL_DisplayMode mode;
+		int display = SDL_GetWindowDisplayIndex(window.handle);
+		SDL_GetDesktopDisplayMode(display, &mode);
+		SDL_SetWindowDisplayMode(window.handle, &mode);
+		SDL_SetWindowFullscreen(window.handle, SDL_WINDOW_FULLSCREEN);
+	} else {
+		SDL_SetWindowFullscreen(window.handle, 0);
+	}
+}
+
+bool is_fullscreen() {
+	u32 flags = SDL_GetWindowFlags(window.handle);
+	return (flags & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+double get_time() {
+	return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
 }
