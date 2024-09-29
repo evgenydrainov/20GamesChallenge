@@ -28,6 +28,7 @@ include_directories(${PROJECT_NAME} ${SDL2_INCLUDE_DIRS})
 
 set(SOURCES
 	src/batch_renderer.cpp
+	src/font.cpp
 	src/game.cpp
 	src/main.cpp
 	src/package.cpp

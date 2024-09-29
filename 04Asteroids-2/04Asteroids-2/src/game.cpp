@@ -8,6 +8,9 @@ void Game::init() {
 
 	player.x = 100;
 	player.y = 100;
+
+	ms_gothic = load_bmfont_file("fonts/ms_gothic.fnt", "fonts/ms_gothic_0.png");
+	ms_mincho = load_bmfont_file("fonts/ms_mincho.fnt", "fonts/ms_mincho_0.png");
 }
 
 void Game::deinit() {
@@ -120,6 +123,9 @@ void Game::draw(float /*delta*/) {
 	}
 
 	draw_texture(player_texture, {}, {player.x, player.y}, {1, 1}, {player_texture.width / 2, player_texture.height / 2}, player.dir);
+
+	draw_text(ms_mincho, "Hello, World!", 0, 0);
+	draw_text(ms_gothic, "Hello, World!", 0, 12);
 
 	// draw gui
 	break_batch();

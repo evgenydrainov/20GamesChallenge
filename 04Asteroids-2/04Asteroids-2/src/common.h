@@ -55,6 +55,7 @@ struct Rectf {
 
 #define log_info(fmt, ...)  SDL_LogInfo (SDL_LOG_CATEGORY_APPLICATION, fmt, ##__VA_ARGS__)
 #define log_error(fmt, ...) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...)  SDL_LogWarn (SDL_LOG_CATEGORY_APPLICATION, fmt, ##__VA_ARGS__)
 
 //
 // For now, asserts will be enabled in release build.
@@ -197,23 +198,33 @@ inline const char* format_size_string(size_t bytes) {
 }
 
 
-inline vec4 get_color(u32 rgba) {
-	vec4 result;
-	result.r = ((rgba >> 24) & 0xFF) / 255.0f;
-	result.g = ((rgba >> 16) & 0xFF) / 255.0f;
-	result.b = ((rgba >>  8) & 0xFF) / 255.0f;
-	result.a = ((rgba >>  0) & 0xFF) / 255.0f;
-	return result;
+inline constexpr vec4 get_color(u32 rgba) {
+	return {
+		((rgba >> 24) & 0xFF) / 255.0f,
+		((rgba >> 16) & 0xFF) / 255.0f,
+		((rgba >>  8) & 0xFF) / 255.0f,
+		((rgba >>  0) & 0xFF) / 255.0f
+	};
 }
 
-inline vec4 get_color_4bit(u16 rgba) {
-	vec4 result;
-	result.r = ((rgba >> 12) & 0xF) / 15.0f;
-	result.g = ((rgba >>  8) & 0xF) / 15.0f;
-	result.b = ((rgba >>  4) & 0xF) / 15.0f;
-	result.a = ((rgba >>  0) & 0xF) / 15.0f;
-	return result;
+inline constexpr vec4 get_color_4bit(u16 rgba) {
+	return {
+		((rgba >> 12) & 0xF) / 15.0f,
+		((rgba >>  8) & 0xF) / 15.0f,
+		((rgba >>  4) & 0xF) / 15.0f,
+		((rgba >>  0) & 0xF) / 15.0f
+	};
 }
+
+
+constexpr vec4 color_white  = get_color(0xffffffff);
+constexpr vec4 color_black  = get_color(0x000000ff);
+constexpr vec4 color_red    = get_color(0xff0000ff);
+constexpr vec4 color_green  = get_color(0x00ff00ff);
+constexpr vec4 color_blue   = get_color(0x0000ffff);
+constexpr vec4 color_yellow = get_color(0xffff00ff);
+
+constexpr vec4 color_cornflower_blue = get_color(0x6495edff);
 
 
 
@@ -691,6 +702,15 @@ inline float string_to_f32(string str, bool* done = nullptr) {
 
 	if (done) *done = true;
 	return result * negative;
+}
+
+inline bool starts_with(string str, string prefix) {
+	if (str.count < prefix.count) {
+		return false;
+	}
+
+	str.count = prefix.count;
+	return str == prefix;
 }
 
 template <size_t N>

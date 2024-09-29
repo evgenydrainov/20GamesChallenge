@@ -9,13 +9,6 @@ constexpr size_t INDICES_PER_QUAD   = 6;
 constexpr size_t BATCH_MAX_VERTICES = (BATCH_MAX_QUADS * VERTICES_PER_QUAD);
 constexpr size_t BATCH_MAX_INDICES  = (BATCH_MAX_QUADS * INDICES_PER_QUAD);
 
-constexpr vec4 color_white  = { 1.00f, 1.00f, 1.00f, 1.00f };
-constexpr vec4 color_black  = { 0.00f, 0.00f, 0.00f, 1.00f };
-constexpr vec4 color_red    = { 1.00f, 0.00f, 0.00f, 1.00f };
-constexpr vec4 color_green  = { 0.00f, 1.00f, 0.00f, 1.00f };
-constexpr vec4 color_blue   = { 0.00f, 0.00f, 1.00f, 1.00f };
-constexpr vec4 color_yellow = { 1.00f, 1.00f, 0.00f, 1.00f };
-
 struct Vertex {
 	vec3 pos;
 	vec3 normal;

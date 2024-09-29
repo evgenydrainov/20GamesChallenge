@@ -27,7 +27,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
 		game.update(window.delta);
 
-		vec4 clear_color = color_black; // get_color(0x6495edff);
+		vec4 clear_color = color_black;
 		render_begin_frame(clear_color);
 
 		game.draw(window.delta);
