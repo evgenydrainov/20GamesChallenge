@@ -13,13 +13,44 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 	}
 
 	string line;
-
-	// 
-	// TODO: read font size and line height
-	// 
+	string word;
 
 	line = eat_line(&text); // info
+
+	while (line.count > 0) {
+		eat_whitespace(&line);
+		word = eat_non_whitespace(&line);
+
+		string prefix = "size=";
+		if (starts_with(word, prefix)) {
+			advance(&word, prefix.count);
+
+			bool done;
+			u32 size = string_to_u32(word, &done);
+			Assert(done);
+
+			font.size = (int) size;
+		}
+	}
+
 	line = eat_line(&text); // common
+
+	while (line.count > 0) {
+		eat_whitespace(&line);
+		word = eat_non_whitespace(&line);
+
+		string prefix = "lineHeight=";
+		if (starts_with(word, prefix)) {
+			advance(&word, prefix.count);
+
+			bool done;
+			u32 line_height = string_to_u32(word, &done);
+			Assert(done);
+
+			font.line_height = (int) line_height;
+		}
+	}
+
 	line = eat_line(&text); // page
 	line = eat_line(&text); // chars
 
@@ -30,14 +61,14 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 		line = eat_line(&text);
 
 		eat_whitespace(&line);
-		string word = eat_non_whitespace(&line);
+		word = eat_non_whitespace(&line);
 		Assert(word == "char");
 
 		auto eat_value_u32 = [&](string prefix) {
 			Assert(prefix.count >= 2);
 
 			eat_whitespace(&line);
-			string word = eat_non_whitespace(&line);
+			word = eat_non_whitespace(&line);
 			Assert(starts_with(word, prefix));
 			advance(&word, prefix.count);
 

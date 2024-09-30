@@ -583,10 +583,12 @@ inline bool is_numeric(char ch) {
 	return ch >= '0' && ch <= '9';
 }
 
-inline void advance(string* str, size_t i = 1) {
+inline string advance(string* str, size_t i = 1) {
 	i = min(i, str->count);
+	string result = {str->data, i};
 	str->count -= i;
 	str->data  += i;
+	return result;
 }
 
 inline void eat_whitespace(string* str) {
