@@ -88,7 +88,7 @@ void init_window_and_opengl(const char* title,
 	// A little workaround for Linux Mint Cinnamon.
 	// 
 #if defined(_DEBUG) && defined(__unix__)
-	SDL_RaiseWindow(window);
+	SDL_RaiseWindow(window.handle);
 #endif
 
 
