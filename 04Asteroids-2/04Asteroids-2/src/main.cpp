@@ -15,8 +15,6 @@ int main(int /*argc*/, char* /*argv*/[]) {
 	init_renderer();
 	defer { deinit_renderer(); };
 
-	Game game = {};
-
 	game.init();
 	defer { game.deinit(); };
 

@@ -3,40 +3,45 @@
 #include "window_creation.h"
 #include "batch_renderer.h"
 
+Game game;
+
 void Game::init() {
 	player_texture = load_texture_from_file("textures/player.png");
 
-	player.x = 100;
-	player.y = 100;
+	player.pos.x = 100;
+	player.pos.y = 100;
 
 	ms_gothic = load_bmfont_file("fonts/ms_gothic.fnt", "fonts/ms_gothic_0.png");
 	ms_mincho = load_bmfont_file("fonts/ms_mincho.fnt", "fonts/ms_mincho_0.png");
+
+	p_bullets.data     = (Bullet*) malloc(MAX_BULLETS * sizeof(p_bullets[0]));
+	p_bullets.capacity = MAX_BULLETS;
 }
 
 void Game::deinit() {
-	
+	free(p_bullets.data);
 }
 
 #define PLAYER_ACC      0.30f
 #define PLAYER_TURN_SPD 7.0f
 #define PLAYER_MAX_SPD  6.0f
 
-static void decelerate(float* hsp, float* vsp, float dec, float delta) {
-	float len = glm::length(vec2{*hsp, *vsp});
+static void decelerate(vec2* vel, float dec, float delta) {
+	float len = glm::length(*vel);
 	if (len > dec) {
-		*hsp -= dec * (*hsp / len) * delta;
-		*vsp -= dec * (*vsp / len) * delta;
+		vel->x -= dec * (vel->x / len) * delta;
+		vel->y -= dec * (vel->y / len) * delta;
 	} else {
-		*hsp = 0.0f;
-		*vsp = 0.0f;
+		vel->x = 0.0f;
+		vel->y = 0.0f;
 	}
 }
 
-static void limit_speed(float* hsp, float* vsp, float max_spd) {
-	float len = glm::length(vec2{*hsp, *vsp});
+static void limit_speed(vec2* vel, float max_spd) {
+	float len = glm::length(*vel);
 	if (len > max_spd) {
-		*hsp = (*hsp / len) * max_spd;
-		*vsp = (*vsp / len) * max_spd;
+		vel->x = (vel->x / len) * max_spd;
+		vel->y = (vel->y / len) * max_spd;
 	}
 }
 
@@ -56,32 +61,64 @@ void Game::update(float delta) {
 
 		if (is_key_held(SDL_SCANCODE_UP)) {
 			// accelerate
-			player.hsp += lengthdir_x(acc, player.dir) * delta;
-			player.vsp += lengthdir_y(acc, player.dir) * delta;
+			player.vel += lengthdir_v2(acc, player.dir) * delta;
 		} else {
 			float dec = is_key_held(SDL_SCANCODE_DOWN) ? PLAYER_ACC : (PLAYER_ACC / 16.0f);
-			decelerate(&player.hsp, &player.vsp, dec, delta);
+			decelerate(&player.vel, dec, delta);
 		}
 
-		limit_speed(&player.hsp, &player.vsp, max_spd);
+		limit_speed(&player.vel, max_spd);
+
+		player.fire_timer += delta;
+		while (player.fire_timer >= 10.0f) {
+			if (player.fire_queue == 0) {
+				if (is_key_held(SDL_SCANCODE_Z)) {
+					player.fire_queue = 2;
+				}
+			}
+
+			if (player.fire_queue > 0) {
+				Bullet b = {};
+				b.pos = player.pos;
+
+				float spd = 10;
+				b.vel = player.vel + lengthdir_v2(spd, player.dir);
+
+				array_add(&p_bullets, b);
+
+				player.fire_queue--;
+			}
+
+			player.fire_timer -= 10.0f;
+		}
+	}
+
+	// update player bullets
+	For (b, p_bullets) {
+		if (b->lifetime >= b->lifespan) {
+			Remove(b, p_bullets);
+			continue;
+		}
+
+		b->lifetime += delta;
 	}
 
 	// physics update
 	{
-		player.x += player.hsp * delta;
-		player.y += player.vsp * delta;
+		player.pos += player.vel * delta;
+
+		For (b, p_bullets) {
+			b->pos += b->vel * delta;
+		}
 	}
 
 	// update camera
 	{
-		float target_x = player.x + lengthdir_x(50, player.dir);
-		float target_y = player.y + lengthdir_y(50, player.dir);
+		vec2 target = player.pos + lengthdir_v2(50, player.dir);
 
-		camera_x += player.hsp * delta;
-		camera_y += player.vsp * delta;
+		camera.pos += player.vel * delta;
 
-		Lerp_Delta(&camera_x, target_x, 0.05f, delta);
-		Lerp_Delta(&camera_y, target_y, 0.05f, delta);
+		Lerp_Delta(&camera.pos, target, 0.05f, delta);
 	}
 
 	if (is_key_pressed(SDL_SCANCODE_F4, false)) {
@@ -90,11 +127,11 @@ void Game::update(float delta) {
 }
 
 void Game::draw(float /*delta*/) {
-	float camera_w = GAME_W / camera_zoom;
-	float camera_h = GAME_H / camera_zoom;
+	float camera_w = GAME_W / camera.zoom;
+	float camera_h = GAME_H / camera.zoom;
 
-	float camera_left = camera_x - camera_w / 2.0f;
-	float camera_top  = camera_y - camera_h / 2.0f;
+	float camera_left = camera.pos.x - camera_w / 2.0f;
+	float camera_top  = camera.pos.y - camera_h / 2.0f;
 
 	break_batch();
 	renderer.proj_mat = glm::ortho<float>(0, camera_w, camera_h, 0);
@@ -122,7 +159,11 @@ void Game::draw(float /*delta*/) {
 		}
 	}
 
-	draw_texture(player_texture, {}, {player.x, player.y}, {1, 1}, {player_texture.width / 2, player_texture.height / 2}, player.dir);
+	draw_texture(player_texture, {}, player.pos, {1, 1}, {player_texture.width / 2, player_texture.height / 2}, player.dir);
+
+	For (b, p_bullets) {
+		draw_circle(b->pos, 8, color_white);
+	}
 
 	draw_text(ms_mincho, "Hello, World!", 0, 0);
 	draw_text(ms_gothic, "Hello, World!", 0, 12);

@@ -7,19 +7,34 @@
 #define GAME_H 480
 
 struct Player {
-	float x;
-	float y;
-	float hsp;
-	float vsp;
+	vec2 pos;
+	vec2 vel;
 	float dir;
+
+	float fire_timer;
+	int fire_queue;
+};
+
+struct Bullet {
+	vec2 pos;
+	vec2 vel;
+
+	float lifetime;
+	float lifespan = 60;
+};
+
+struct Camera {
+	vec2 pos;
+	float zoom = 1;
 };
 
 struct Game {
-	Player player;
+	static constexpr size_t MAX_BULLETS = 1'000;
 
-	float camera_x;
-	float camera_y;
-	float camera_zoom = 1;
+	Player player;
+	bump_array<Bullet> p_bullets;
+
+	Camera camera;
 
 	Texture player_texture;
 	Font ms_gothic;
@@ -31,3 +46,5 @@ struct Game {
 	void update(float delta);
 	void draw(float delta);
 };
+
+extern Game game;

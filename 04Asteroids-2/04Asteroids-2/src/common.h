@@ -5,6 +5,10 @@
 //                 SECTION: Common types.
 // -----------------------------------------------------------
 
+#if !defined(_DEBUG) && !defined(NDEBUG)
+#error You have to define _DEBUG or NDEBUG.
+#endif
+
 #include <SDL.h>
 #include <stb/stb_sprintf.h>
 #include <glm/glm.hpp>
@@ -23,11 +27,11 @@ typedef uint64_t u64;
 
 typedef ptrdiff_t ssize_t;
 
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
+typedef glm::vec2 vec2;
+typedef glm::vec3 vec3;
+typedef glm::vec4 vec4;
 
-using glm::mat4;
+typedef glm::mat4 mat4;
 
 struct Rect {
 	int x;
@@ -320,6 +324,10 @@ inline bool circle_vs_rotated_rect(float circle_x, float circle_y, float circle_
 
 inline float lengthdir_x(float len, float dir) { return  dcos(dir) * len; }
 inline float lengthdir_y(float len, float dir) { return -dsin(dir) * len; }
+
+inline vec2 lengthdir_v2(float len, float dir) {
+	return {lengthdir_x(len, dir), lengthdir_y(len, dir)};
+}
 
 inline float wrapf(float a, float b) {
 	return fmodf((fmodf(a, b) + b), b);
