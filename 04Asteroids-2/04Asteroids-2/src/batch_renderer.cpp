@@ -2,49 +2,97 @@
 
 #include "package.h"
 #include "window_creation.h"
+#include "util.h"
 
 Batch_Renderer renderer = {};
 
 
 static char texture_vert_shader_src[] = R"(
-	#version 330 core
+#version 330 core
 
-	layout(location = 0) in vec3 in_Position;
-	layout(location = 1) in vec3 in_Normal;
-	layout(location = 2) in vec4 in_Color;
-	layout(location = 3) in vec2 in_TexCoord;
+layout(location = 0) in vec3 in_Position;
+layout(location = 1) in vec3 in_Normal;
+layout(location = 2) in vec4 in_Color;
+layout(location = 3) in vec2 in_TexCoord;
 
-	out vec4 v_Color;
-	out vec2 v_TexCoord;
+out vec4 v_Color;
+out vec2 v_TexCoord;
 
-	uniform mat4 u_MVP;
+uniform mat4 u_MVP;
 
-	void main() {
-		gl_Position = u_MVP * vec4(in_Position, 1.0);
+void main() {
+	gl_Position = u_MVP * vec4(in_Position, 1.0);
 
-		v_Color    = in_Color;
-		v_TexCoord = in_TexCoord;
-	}
+	v_Color    = in_Color;
+	v_TexCoord = in_TexCoord;
+}
 )";
 
 
 
 static char texture_frag_shader_src[] = R"(
-	#version 330 core
+#version 330 core
 
-	layout(location = 0) out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
-	in vec4 v_Color;
-	in vec2 v_TexCoord;
+in vec4 v_Color;
+in vec2 v_TexCoord;
 
-	uniform sampler2D u_Texture;
+uniform sampler2D u_Texture;
 
-	void main() {
-		vec4 color = texture(u_Texture, v_TexCoord);
+void main() {
+	vec4 color = texture(u_Texture, v_TexCoord);
 
-		FragColor = color * v_Color;
-	}
+	FragColor = color * v_Color;
+}
 )";
+
+
+
+static char sharp_bilinear_frag_shader_src[] = R"(
+#version 330 core
+
+/*
+	Author: rsn8887 (based on TheMaister)
+	License: Public domain
+
+	This is an integer prescale filter that should be combined
+	with a bilinear hardware filtering (GL_BILINEAR filter or some such) to achieve
+	a smooth scaling result with minimum blur. This is good for pixelgraphics
+	that are scaled by non-integer factors.
+*/
+
+layout(location = 0) out vec4 FragColor;
+
+in vec4 v_Color;
+in vec2 v_TexCoord;
+
+uniform sampler2D u_Texture;
+
+uniform vec2 u_SourceSize;
+uniform vec2 u_Scale; // The integer scale.
+
+void main() {
+	vec2 texel = v_TexCoord * u_SourceSize;
+	vec2 scale = u_Scale;
+
+	vec2 texel_floored = floor(texel);
+	vec2 s = fract(texel);
+	vec2 region_range = 0.5 - 0.5 / scale;
+
+	// Figure out where in the texel to sample to get correct pre-scaled bilinear.
+	// Uses the hardware bilinear interpolator to avoid having to sample 4 times manually.
+
+	vec2 center_dist = s - 0.5;
+	vec2 f = (center_dist - clamp(center_dist, -region_range, region_range)) * scale + 0.5;
+
+	vec2 mod_texel = texel_floored + f;
+
+	vec4 color = texture(u_Texture, mod_texel / u_SourceSize);
+	FragColor = color * v_Color;
+}
+)";
+
 
 
 static void set_vertex_attribs() {
@@ -123,51 +171,45 @@ void init_renderer() {
 	// Load shaders.
 	// 
 	{
-		auto compile_shader = [&](GLenum type, const char* source) {
-			u32 shader = glCreateShader(type);
-
-			const char* sources[] = {source};
-			glShaderSource(shader, ArrayLength(sources), sources, NULL);
-
-			glCompileShader(shader);
-
-			int success;
-			glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-			if (!success) {
-				char buf[512];
-				glGetShaderInfoLog(shader, sizeof(buf), NULL, buf);
-				log_error("Shader Compile Error: %s", buf);
-			}
-
-			return shader;
-		};
-
-		auto link_program = [&](u32 vertex_shader, u32 fragment_shader) {
-			u32 program = glCreateProgram();
-
-			glAttachShader(program, vertex_shader);
-			glAttachShader(program, fragment_shader);
-
-			glLinkProgram(program);
-
-			int success;
-			glGetProgramiv(program, GL_LINK_STATUS, &success);
-			if (!success) {
-				char buf[512];
-				glGetProgramInfoLog(program, sizeof(buf), NULL, buf);
-				log_error("Shader Link Error: %s", buf);
-			}
-
-			return program;
-		};
-
 		u32 texture_vert_shader = compile_shader(GL_VERTEX_SHADER, texture_vert_shader_src);
 		defer { glDeleteShader(texture_vert_shader); };
 
 		u32 texture_frag_shader = compile_shader(GL_FRAGMENT_SHADER, texture_frag_shader_src);
 		defer { glDeleteShader(texture_frag_shader); };
 
+		u32 sharp_bilinear_frag_shader = compile_shader(GL_FRAGMENT_SHADER, sharp_bilinear_frag_shader_src);
+		defer { glDeleteShader(sharp_bilinear_frag_shader); };
+
 		renderer.texture_shader = link_program(texture_vert_shader, texture_frag_shader);
+		renderer.sharp_bilinear_shader = link_program(texture_vert_shader, sharp_bilinear_frag_shader);
+
+		renderer.current_shader = renderer.texture_shader;
+	}
+
+	{
+		glGenTextures(1, &renderer.game_texture); // @Leak
+
+		glBindTexture(GL_TEXTURE_2D, renderer.game_texture);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // GL_LINEAR for sharp bilinear shader
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, window.game_width, window.game_height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	{
+		glGenFramebuffers(1, &renderer.game_framebuffer); // @Leak
+
+		glBindFramebuffer(GL_FRAMEBUFFER, renderer.game_framebuffer);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderer.game_texture, 0);
+		// glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,  GL_TEXTURE_2D, game_depth_texture, 0);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 }
 
@@ -184,14 +226,35 @@ void render_begin_frame(vec4 clear_color) {
 	renderer.curr_draw_calls = 0;
 	renderer.curr_max_batch  = 0;
 
+	glBindFramebuffer(GL_FRAMEBUFFER, renderer.game_framebuffer);
+
 	glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	// scale to fit
+	glViewport(0, 0, window.game_width, window.game_height);
+}
+
+void render_end_frame() {
+	break_batch();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	int backbuffer_width;
+	int backbuffer_height;
+	SDL_GL_GetDrawableSize(window.handle, &backbuffer_width, &backbuffer_height);
+
+	glViewport(0, 0, backbuffer_width, backbuffer_height);
+	renderer.proj_mat = glm::ortho(0.0f, (float)backbuffer_width, (float)backbuffer_height, 0.0f);
+
+	glClearColor(0, 0, 0, 1);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 	{
-		int backbuffer_width;
-		int backbuffer_height;
-		SDL_GL_GetDrawableSize(window.handle, &backbuffer_width, &backbuffer_height);
+		u32 program    = renderer.sharp_bilinear_shader;
+		u32 old_shader = renderer.current_shader;
+
+		renderer.current_shader = program;
+		glUseProgram(program);
 
 		float xscale = backbuffer_width  / (float)window.game_width;
 		float yscale = backbuffer_height / (float)window.game_height;
@@ -202,12 +265,28 @@ void render_begin_frame(vec4 clear_color) {
 		int x = (backbuffer_width  - w) / 2;
 		int y = (backbuffer_height - h) / 2;
 
-		glViewport(x, y, w, h);
-	}
-}
+		{
+			int u_SourceSize = glGetUniformLocation(program, "u_SourceSize");
+			glUniform2f(u_SourceSize, (float)window.game_width, (float)window.game_height);
+		}
 
-void render_end_frame() {
-	break_batch();
+		{
+			float int_scale = max(floorf(scale), 1.0f);
+
+			int u_Scale = glGetUniformLocation(program, "u_Scale");
+			glUniform2f(u_Scale, int_scale, int_scale);
+		}
+
+		Texture t;
+		t.ID = renderer.game_texture;
+		t.width  = window.game_width;
+		t.height = window.game_height;
+		draw_texture(t, {}, {(float)x, (float)y}, {scale, scale}, {}, 0, color_white, {false, true});
+
+		break_batch();
+
+		renderer.current_shader = old_shader;
+	}
 }
 
 void break_batch() {
@@ -226,7 +305,7 @@ void break_batch() {
 
 	switch (renderer.current_mode) {
 		case MODE_QUADS: {
-			u32 program = renderer.texture_shader;
+			u32 program = renderer.current_shader;
 
 			glUseProgram(program);
 			defer { glUseProgram(0); };
@@ -251,7 +330,7 @@ void break_batch() {
 		}
 
 		case MODE_TRIANGLES: {
-			u32 program = renderer.texture_shader;
+			u32 program = renderer.current_shader;
 
 			glUseProgram(program);
 			defer { glUseProgram(0); };

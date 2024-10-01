@@ -28,11 +28,17 @@ struct Batch_Renderer {
 	bump_array<Vertex> batch_vertices;
 
 	u32 texture_shader;
+	u32 sharp_bilinear_shader;
+
+	u32 current_shader;
 
 	u32 batch_vao;
 	u32 batch_vbo;
 	u32 batch_ebo;
 	u32 stub_texture;
+
+	u32 game_texture;
+	u32 game_framebuffer;
 
 	mat4 proj_mat = {1};
 	mat4 view_mat = {1};

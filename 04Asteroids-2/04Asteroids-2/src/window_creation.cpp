@@ -125,15 +125,22 @@ void init_window_and_opengl(const char* title,
 	}
 #endif
 
+	// specify either vsync or target_fps
+	Assert((vsync && target_fps == 0) || (!vsync && target_fps != 0));
+
 	if (vsync) {
-		SDL_GL_SetSwapInterval(1);
-	} else {
-		SDL_GL_SetSwapInterval(0);
+		SDL_DisplayMode mode;
+		int display = SDL_GetWindowDisplayIndex(window.handle);
+		SDL_GetDesktopDisplayMode(display, &mode);
+
+		Assert(mode.refresh_rate != 0);
+		target_fps = (double) mode.refresh_rate;
 	}
+
+	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+
 	window.vsync = vsync;
 	window.target_fps = target_fps;
-
-	Assert(target_fps != 0);
 	window.prev_time = get_time() - 1.0 / target_fps;
 
 	glDisable(GL_CULL_FACE);
@@ -188,7 +195,6 @@ void handle_event(SDL_Event* ev) {
 void begin_frame() {
 	double time = get_time();
 
-	Assert(window.target_fps != 0);
 	window.frame_end_time = time + (1.0 / window.target_fps);
 
 	window.delta = (float)((time - window.prev_time) * 60.0);
