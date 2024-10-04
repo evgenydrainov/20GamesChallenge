@@ -423,6 +423,13 @@ void draw_texture(Texture t, Rect src,
 	}
 }
 
+void draw_texture_centered(Texture t,
+						   vec2 pos, vec2 scale,
+						   float angle, vec4 color, glm::bvec2 flip) {
+	vec2 origin = {t.width / 2.0f, t.height / 2.0f};
+	draw_texture(t, {}, pos, scale, origin, angle, color, flip);
+}
+
 void draw_rectangle(Rectf rect, vec4 color) {
 	Texture t = {renderer.stub_texture, 1, 1};
 	vec2 pos = {rect.x, rect.y};

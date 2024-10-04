@@ -65,6 +65,10 @@ void draw_texture(Texture t, Rect src = {},
 				  vec2 pos = {}, vec2 scale = {1, 1},
 				  vec2 origin = {}, float angle = 0, vec4 color = color_white, glm::bvec2 flip = {});
 
+void draw_texture_centered(Texture t,
+						   vec2 pos = {}, vec2 scale = {1, 1},
+						   float angle = 0, vec4 color = color_white, glm::bvec2 flip = {});
+
 void draw_rectangle(Rectf rect, vec4 color);
 
 void draw_rectangle(Rectf rect, vec2 scale,

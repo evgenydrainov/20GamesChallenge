@@ -124,6 +124,10 @@ void Game::update(float delta) {
 	if (is_key_pressed(SDL_SCANCODE_F4, false)) {
 		set_fullscreen(!is_fullscreen());
 	}
+
+	if (is_key_pressed(SDL_SCANCODE_H)) {
+		show_hitboxes ^= true;
+	}
 }
 
 void Game::draw(float /*delta*/) {
@@ -159,7 +163,7 @@ void Game::draw(float /*delta*/) {
 		}
 	}
 
-	draw_texture(player_texture, {}, player.pos, {1, 1}, {player_texture.width / 2, player_texture.height / 2}, player.dir);
+	draw_texture_centered(player_texture, player.pos, {1, 1}, player.dir);
 
 	For (b, p_bullets) {
 		draw_circle(b->pos, 8, color_white);
@@ -168,10 +172,22 @@ void Game::draw(float /*delta*/) {
 	draw_text(ms_mincho, "Hello, World!", 0, 0);
 	draw_text(ms_gothic, "Hello, World!", 0, 12);
 
+	if (show_hitboxes) {
+		draw_rectangle({camera_left - 1, camera_top - 1, camera_w + 2, camera_h + 2}, {0, 0, 0, 0.5f});
+
+		draw_circle(player.pos, player.radius, color_white);
+
+		For (b, p_bullets) {
+			draw_circle(b->pos, b->radius, color_white);
+		}
+	}
+
 	// draw gui
 	break_batch();
 	renderer.proj_mat = glm::ortho<float>(0, GAME_W, GAME_H, 0);
 	renderer.view_mat = {1};
 
-	//draw_rectangle({0, 0, GAME_W, GAME_H}, color_blue);
+	if (show_hitboxes) {
+		draw_text(ms_gothic, "H - Show Hitboxes", 0, 0);
+	}
 }

@@ -10,6 +10,7 @@ struct Player {
 	vec2 pos;
 	vec2 vel;
 	float dir;
+	float radius = 8;
 
 	float fire_timer;
 	int fire_queue;
@@ -18,6 +19,7 @@ struct Player {
 struct Bullet {
 	vec2 pos;
 	vec2 vel;
+	float radius = 8;
 
 	float lifetime;
 	float lifespan = 60;
@@ -39,6 +41,8 @@ struct Game {
 	Texture player_texture;
 	Font ms_gothic;
 	Font ms_mincho;
+
+	bool show_hitboxes;
 
 	void init();
 	void deinit();
