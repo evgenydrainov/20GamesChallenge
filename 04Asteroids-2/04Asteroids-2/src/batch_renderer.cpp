@@ -245,6 +245,8 @@ void render_end_frame() {
 
 	glViewport(0, 0, backbuffer_width, backbuffer_height);
 	renderer.proj_mat = glm::ortho(0.0f, (float)backbuffer_width, (float)backbuffer_height, 0.0f);
+	renderer.view_mat = {1};
+	renderer.model_mat = {1};
 
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);

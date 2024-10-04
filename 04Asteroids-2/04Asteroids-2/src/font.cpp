@@ -103,18 +103,18 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 	return font;
 }
 
-vec2 draw_text(Font font, string text, float x, float y,
+vec2 draw_text(Font font, string text, vec2 text_pos,
 			   HAlign halign, VAlign valign, vec4 color) {
-	if (font.glyphs.count == 0) return {x, y};
+	if (font.glyphs.count == 0) return text_pos;
 
 	if (valign == VALIGN_MIDDLE) {
-		y -= measure_text(font, text).y / 2.0f;
+		text_pos.y -= measure_text(font, text).y / 2.0f;
 	} else if (valign == VALIGN_BOTTOM) {
-		y -= measure_text(font, text).y;
+		text_pos.y -= measure_text(font, text).y;
 	}
 
-	float ch_x = x;
-	float ch_y = y;
+	float ch_x = text_pos.x;
+	float ch_y = text_pos.y;
 
 	if (halign == HALIGN_CENTER) {
 		ch_x -= measure_text(font, text, true).x / 2.0f;
@@ -131,7 +131,7 @@ vec2 draw_text(Font font, string text, float x, float y,
 		}
 
 		if (ch == '\n') {
-			ch_x = x;
+			ch_x = text_pos.x;
 			ch_y += font.line_height;
 
 			if (halign == HALIGN_CENTER) {

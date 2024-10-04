@@ -46,6 +46,29 @@ static void limit_speed(vec2* vel, float max_spd) {
 }
 
 void Game::update(float delta) {
+	skip_frame = frame_advance;
+
+	if (is_key_pressed(SDL_SCANCODE_F4, false)) {
+		set_fullscreen(!is_fullscreen());
+	}
+
+	if (is_key_pressed(SDL_SCANCODE_H)) {
+		show_hitboxes ^= true;
+	}
+
+	if (is_key_pressed(SDL_SCANCODE_F5)) {
+		frame_advance = true;
+		skip_frame = false;
+	}
+
+	if (is_key_pressed(SDL_SCANCODE_F6)) {
+		frame_advance = false;
+	}
+
+	if (skip_frame) {
+		return;
+	}
+
 	// update player
 	{
 		float acc = PLAYER_ACC;
@@ -120,14 +143,6 @@ void Game::update(float delta) {
 
 		Lerp_Delta(&camera.pos, target, 0.05f, delta);
 	}
-
-	if (is_key_pressed(SDL_SCANCODE_F4, false)) {
-		set_fullscreen(!is_fullscreen());
-	}
-
-	if (is_key_pressed(SDL_SCANCODE_H)) {
-		show_hitboxes ^= true;
-	}
 }
 
 void Game::draw(float /*delta*/) {
@@ -169,8 +184,8 @@ void Game::draw(float /*delta*/) {
 		draw_circle(b->pos, 8, color_white);
 	}
 
-	draw_text(ms_mincho, "Hello, World!", 0, 0);
-	draw_text(ms_gothic, "Hello, World!", 0, 12);
+	draw_text(ms_mincho, "Hello, World!", {0, 0});
+	draw_text(ms_gothic, "Hello, World!", {0, 12});
 
 	if (show_hitboxes) {
 		draw_rectangle({camera_left - 1, camera_top - 1, camera_w + 2, camera_h + 2}, {0, 0, 0, 0.5f});
@@ -187,7 +202,12 @@ void Game::draw(float /*delta*/) {
 	renderer.proj_mat = glm::ortho<float>(0, GAME_W, GAME_H, 0);
 	renderer.view_mat = {1};
 
+	vec2 text_pos = {};
+
 	if (show_hitboxes) {
-		draw_text(ms_gothic, "H - Show Hitboxes", 0, 0);
+		text_pos = draw_text(ms_gothic, "H - Show Hitboxes\n", text_pos);
+	}
+	if (frame_advance) {
+		text_pos = draw_text(ms_gothic, "F5 - Next Frame\nF6 - Disable Frame Advance Mode\n", text_pos);
 	}
 }

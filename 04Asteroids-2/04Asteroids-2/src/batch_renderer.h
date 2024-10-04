@@ -22,12 +22,18 @@ enum RenderMode {
 	MODE_TRIANGLES,
 };
 
+
+// 
+// A basic batch renderer.
+// 
+// Call break_batch() before making opengl calls or modifying renderer's matrices or renderer's current shader.
+// 
 struct Batch_Renderer {
 	u32 current_texture;
 	RenderMode current_mode;
 	bump_array<Vertex> batch_vertices;
 
-	u32 texture_shader;
+	u32 texture_shader;  // These shaders should be handled by an asset system maybe
 	u32 sharp_bilinear_shader;
 
 	u32 current_shader;
@@ -35,10 +41,10 @@ struct Batch_Renderer {
 	u32 batch_vao;
 	u32 batch_vbo;
 	u32 batch_ebo;
-	u32 stub_texture;
+	u32 stub_texture; // 1x1 white texture
 
-	u32 game_texture;
-	u32 game_framebuffer;
+	u32 game_texture;      // Game is renderer to a framebuffer, and then the framebuffer is
+	u32 game_framebuffer;  // rendered to the screen.
 
 	mat4 proj_mat = {1};
 	mat4 view_mat = {1};
@@ -47,19 +53,19 @@ struct Batch_Renderer {
 	int draw_calls;
 	size_t max_batch;
 
-	int curr_draw_calls;
+	int curr_draw_calls;  // These values change during the frame
 	size_t curr_max_batch;
 };
 
 extern Batch_Renderer renderer;
 
-void init_renderer();
+void init_renderer(); // assumes opengl is initialized
 void deinit_renderer();
 
 void render_begin_frame(vec4 clear_color);
 void render_end_frame();
 
-void break_batch();
+void break_batch(); // makes the draw call
 
 void draw_texture(Texture t, Rect src = {},
 				  vec2 pos = {}, vec2 scale = {1, 1},

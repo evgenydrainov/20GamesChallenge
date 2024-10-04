@@ -43,6 +43,8 @@ struct Game {
 	Font ms_mincho;
 
 	bool show_hitboxes;
+	bool frame_advance;
+	bool skip_frame;
 
 	void init();
 	void deinit();
