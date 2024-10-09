@@ -294,8 +294,16 @@ inline float point_distance(float x1, float y1, float x2, float y2) {
 	return sqrtf(dx * dx + dy * dy);
 }
 
+inline float point_distance(vec2 p1, vec2 p2) {
+	return point_distance(p1.x, p1.y, p2.x, p2.y);
+}
+
 inline float point_direction(float x1, float y1, float x2, float y2) {
 	return to_degrees(atan2f(y1 - y2, x2 - x1));
+}
+
+inline float point_direction(vec2 p1, vec2 p2) {
+	return point_direction(p1.x, p1.y, p2.x, p2.y);
 }
 
 inline bool circle_vs_circle(float x1, float y1, float r1, float x2, float y2, float r2) {
@@ -338,6 +346,16 @@ inline T wrap(T a, T b) {
 	return ((a % b) + b) % b;
 }
 
+inline float angle_wrap(float deg) {
+	return wrapf(deg, 360.0f);
+}
+
+inline float angle_difference(float dest, float src) {
+	float res = dest - src;
+	res = angle_wrap(res + 180.0f) - 180.0f;
+	return res;
+}
+
 // 
 // One-Liners
 // 
@@ -348,7 +366,7 @@ template <typename T>
 inline void Lerp(T* a, T b, float f) { *a = lerp(*a, b, f); }
 
 template <typename T>
-inline void Lerp_Delta(T* a, T b, float f, float delta) { *a = lerp_delta(*a, b, f, delta); }
+inline void Lerp_delta(T* a, T b, float f, float delta) { *a = lerp_delta(*a, b, f, delta); }
 
 template <typename T>
 inline void Approach(T* start, T end, T shift) { *start = approach(*start, end, shift); }

@@ -14,6 +14,8 @@ struct Player {
 
 	float fire_timer;
 	int fire_queue;
+
+	bool focus;
 };
 
 struct Bullet {
@@ -25,16 +27,30 @@ struct Bullet {
 	float lifespan = 60;
 };
 
+struct Enemy {
+	vec2 pos;
+	vec2 vel;
+	float dir;
+	float radius = 8;
+
+	float fire_timer;
+	int fire_queue;
+};
+
 struct Camera {
 	vec2 pos;
 	float zoom = 1;
 };
 
 struct Game {
+	static constexpr size_t MAX_PLAYER_BULLETS = 1'000;
+	static constexpr size_t MAX_ENEMIES = 1'000;
 	static constexpr size_t MAX_BULLETS = 1'000;
 
 	Player player;
 	bump_array<Bullet> p_bullets;
+	bump_array<Enemy> enemies;
+	bump_array<Bullet> bullets;
 
 	Camera camera;
 

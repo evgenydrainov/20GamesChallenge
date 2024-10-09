@@ -241,7 +241,8 @@ bool is_key_pressed(SDL_Scancode key, bool repeat) {
 
 	if (!(key >= 0 && key < window.NUM_KEYS)) return result;
 
-	/*if (!g->console.show)*/ {
+	/*if (!g->console.show)*/
+	{
 		result |= (window.key_pressed[key / 32] & (1 << (key % 32))) != 0;
 
 		if (repeat) {
@@ -255,9 +256,10 @@ bool is_key_pressed(SDL_Scancode key, bool repeat) {
 bool is_key_held(SDL_Scancode key) {
 	bool result = false;
 
-	if (!(key >= 0 && key < window.NUM_KEYS)) return result;
+	if (!(key >= 0 && key < SDL_NUM_SCANCODES)) return result;
 
-	/*if (!g->console.show)*/ {
+	/*if (!g->console.show)*/
+	{
 		const u8* state = SDL_GetKeyboardState(nullptr);
 
 		result |= (state[key] != 0);

@@ -8,23 +8,36 @@ Game game;
 void Game::init() {
 	player_texture = load_texture_from_file("textures/player.png");
 
-	player.pos.x = 100;
-	player.pos.y = 100;
+	player.pos = {100, 100};
 
 	ms_gothic = load_bmfont_file("fonts/ms_gothic.fnt", "fonts/ms_gothic_0.png");
 	ms_mincho = load_bmfont_file("fonts/ms_mincho.fnt", "fonts/ms_mincho_0.png");
 
-	p_bullets.data     = (Bullet*) malloc(MAX_BULLETS * sizeof(p_bullets[0]));
-	p_bullets.capacity = MAX_BULLETS;
+	p_bullets.data     = (Bullet*) malloc(MAX_PLAYER_BULLETS * sizeof(p_bullets[0]));
+	p_bullets.capacity = MAX_PLAYER_BULLETS;
+
+	enemies.data     = (Enemy*) malloc(MAX_ENEMIES * sizeof(enemies[0]));
+	enemies.capacity = MAX_ENEMIES;
+
+	bullets.data     = (Bullet*) malloc(MAX_BULLETS * sizeof(bullets[0]));
+	bullets.capacity = MAX_BULLETS;
+
+	{
+		Enemy e = {};
+		array_add(&enemies, e);
+	}
 }
 
 void Game::deinit() {
+	free(bullets.data);
+	free(enemies.data);
 	free(p_bullets.data);
 }
 
-#define PLAYER_ACC      0.30f
-#define PLAYER_TURN_SPD 7.0f
-#define PLAYER_MAX_SPD  6.0f
+static void accelerate(vec2* vel, float acc, float dir, float delta) {
+	vel->x += lengthdir_x(acc, dir) * delta;
+	vel->y += lengthdir_y(acc, dir) * delta;
+}
 
 static void decelerate(vec2* vel, float dec, float delta) {
 	float len = glm::length(*vel);
@@ -44,6 +57,11 @@ static void limit_speed(vec2* vel, float max_spd) {
 		vel->y = (vel->y / len) * max_spd;
 	}
 }
+
+#define PLAYER_ACC       0.30f
+#define PLAYER_TURN_SPD  7.0f
+#define PLAYER_MAX_SPD   6.0f
+#define PLAYER_FOCUS_SPD 2.0f
 
 void Game::update(float delta) {
 	skip_frame = frame_advance;
@@ -71,26 +89,36 @@ void Game::update(float delta) {
 
 	// update player
 	{
-		float acc = PLAYER_ACC;
-		float turn_spd = PLAYER_TURN_SPD;
-		float max_spd = PLAYER_MAX_SPD;
+		player.focus = is_key_held(SDL_SCANCODE_LSHIFT);
 
-		if (is_key_held(SDL_SCANCODE_UP) || is_key_held(SDL_SCANCODE_DOWN)) {
-			turn_spd /= 2.0f;
-		}
+		if (player.focus) {
+			if (is_key_held(SDL_SCANCODE_RIGHT)) {player.pos.x += PLAYER_FOCUS_SPD * delta; camera.pos.x += PLAYER_FOCUS_SPD * delta;}
+			if (is_key_held(SDL_SCANCODE_UP))    {player.pos.y -= PLAYER_FOCUS_SPD * delta; camera.pos.y -= PLAYER_FOCUS_SPD * delta;}
+			if (is_key_held(SDL_SCANCODE_LEFT))  {player.pos.x -= PLAYER_FOCUS_SPD * delta; camera.pos.x -= PLAYER_FOCUS_SPD * delta;}
+			if (is_key_held(SDL_SCANCODE_DOWN))  {player.pos.y += PLAYER_FOCUS_SPD * delta; camera.pos.y += PLAYER_FOCUS_SPD * delta;}
 
-		if (is_key_held(SDL_SCANCODE_RIGHT)) player.dir -= turn_spd * delta;
-		if (is_key_held(SDL_SCANCODE_LEFT))  player.dir += turn_spd * delta;
-
-		if (is_key_held(SDL_SCANCODE_UP)) {
-			// accelerate
-			player.vel += lengthdir_v2(acc, player.dir) * delta;
+			decelerate(&player.vel, 2.0f * PLAYER_ACC, delta);
 		} else {
-			float dec = is_key_held(SDL_SCANCODE_DOWN) ? PLAYER_ACC : (PLAYER_ACC / 16.0f);
-			decelerate(&player.vel, dec, delta);
-		}
+			if (is_key_held(SDL_SCANCODE_UP)) {
+				accelerate(&player.vel, PLAYER_ACC, player.dir, delta);
+			} else {
+				float dec = is_key_held(SDL_SCANCODE_DOWN) ? PLAYER_ACC : (PLAYER_ACC / 16.0f);
+				decelerate(&player.vel, dec, delta);
+			}
 
-		limit_speed(&player.vel, max_spd);
+			{
+				float turn_spd = PLAYER_TURN_SPD;
+
+				if (is_key_held(SDL_SCANCODE_UP) || is_key_held(SDL_SCANCODE_DOWN)) {
+					turn_spd /= 2.0f;
+				}
+
+				if (is_key_held(SDL_SCANCODE_RIGHT)) player.dir -= turn_spd * delta;
+				if (is_key_held(SDL_SCANCODE_LEFT))  player.dir += turn_spd * delta;
+			}
+
+			limit_speed(&player.vel, PLAYER_MAX_SPD);
+		}
 
 		player.fire_timer += delta;
 		while (player.fire_timer >= 10.0f) {
@@ -126,11 +154,27 @@ void Game::update(float delta) {
 		b->lifetime += delta;
 	}
 
+	For (e, enemies) {
+		float target_dir = e->dir - angle_difference(e->dir, point_direction(e->pos, player.pos));
+		Lerp_delta(&e->dir, target_dir, 0.1f, delta);
+
+		accelerate(&e->vel, 0.30f, e->dir, delta);
+		limit_speed(&e->vel, 6.5f);
+	}
+
 	// physics update
 	{
 		player.pos += player.vel * delta;
 
 		For (b, p_bullets) {
+			b->pos += b->vel * delta;
+		}
+
+		For (e, enemies) {
+			e->pos += e->vel * delta;
+		}
+
+		For (b, bullets) {
 			b->pos += b->vel * delta;
 		}
 	}
@@ -141,7 +185,7 @@ void Game::update(float delta) {
 
 		camera.pos += player.vel * delta;
 
-		Lerp_Delta(&camera.pos, target, 0.05f, delta);
+		Lerp_delta(&camera.pos, target, 0.05f, delta);
 	}
 }
 
@@ -184,8 +228,13 @@ void Game::draw(float /*delta*/) {
 		draw_circle(b->pos, 8, color_white);
 	}
 
-	draw_text(ms_mincho, "Hello, World!", {0, 0});
-	draw_text(ms_gothic, "Hello, World!", {0, 12});
+	For (e, enemies) {
+		draw_texture_centered(player_texture, e->pos, {1, 1}, e->dir);
+	}
+
+	For (b, bullets) {
+		draw_circle(b->pos, 8, color_white);
+	}
 
 	if (show_hitboxes) {
 		draw_rectangle({camera_left - 1, camera_top - 1, camera_w + 2, camera_h + 2}, {0, 0, 0, 0.5f});
