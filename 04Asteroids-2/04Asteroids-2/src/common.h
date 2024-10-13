@@ -27,11 +27,11 @@ typedef uint64_t u64;
 
 typedef ptrdiff_t ssize_t;
 
-typedef glm::vec2 vec2;
-typedef glm::vec3 vec3;
-typedef glm::vec4 vec4;
+using glm::vec2;
+using glm::vec3;
+using glm::vec4;
 
-typedef glm::mat4 mat4;
+using glm::mat4;
 
 struct Rect {
 	int x;
