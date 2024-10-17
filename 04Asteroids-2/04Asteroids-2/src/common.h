@@ -683,6 +683,31 @@ inline u32 string_to_u32(string str, bool* done = nullptr) {
 	return result;
 }
 
+inline int string_to_int(string str, bool* out_done = nullptr) {
+	if (str.count == 0) {
+		if (out_done) *out_done = false;
+		return 0;
+	}
+
+	int negative = 1;
+
+	while (str.count > 0 && *str.data == '-') {
+		negative = -negative;
+		advance(&str);
+	}
+
+	bool done;
+	u32 result = string_to_u32(str, &done);
+
+	if (!done) {
+		if (out_done) *out_done = false;
+		return 0;
+	}
+
+	if (out_done) *out_done = true;
+	return (int)result * negative;
+}
+
 inline float string_to_f32(string str, bool* done = nullptr) {
 	if (str.count == 0) {
 		if (done) *done = false;

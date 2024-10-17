@@ -17,6 +17,10 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 
 	line = eat_line(&text); // info
 
+	// 
+	// TODO: Parse 'face="MS Gothic"' somehow
+	// 
+
 	while (line.count > 0) {
 		eat_whitespace(&line);
 		word = eat_non_whitespace(&line);
@@ -26,10 +30,10 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 			advance(&word, prefix.count);
 
 			bool done;
-			u32 size = string_to_u32(word, &done);
+			int size = string_to_int(word, &done);
 			Assert(done);
 
-			font.size = (int) size;
+			font.size = size;
 		}
 	}
 
@@ -44,10 +48,10 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 			advance(&word, prefix.count);
 
 			bool done;
-			u32 line_height = string_to_u32(word, &done);
+			int line_height = string_to_int(word, &done);
 			Assert(done);
 
-			font.line_height = (int) line_height;
+			font.line_height = line_height;
 		}
 	}
 
@@ -64,16 +68,18 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 		word = eat_non_whitespace(&line);
 		Assert(word == "char");
 
-		auto eat_value_u32 = [&](string prefix) {
+		auto eat_value_int = [&](string prefix) -> int {
 			Assert(prefix.count >= 2);
 
 			eat_whitespace(&line);
 			word = eat_non_whitespace(&line);
+
 			Assert(starts_with(word, prefix));
+
 			advance(&word, prefix.count);
 
 			bool done;
-			u32 value = string_to_u32(word, &done);
+			int value = string_to_int(word, &done);
 			if (!done) {
 				prefix.count--;
 				log_warn("Couldn't parse value " Str_Fmt " for char %d in font %s", Str_Arg(prefix), i + 32, fnt_filepath);
@@ -82,18 +88,18 @@ Font load_bmfont_file(const char* fnt_filepath, const char* png_filepath) {
 			return value;
 		};
 
-		u32 id = eat_value_u32("id=");
-		Assert((int)id == i + 32);
+		int id = eat_value_int("id=");
+		Assert(id == i + 32);
 
 		Glyph glyph = {};
 
-		glyph.u        = (int) eat_value_u32("x=");
-		glyph.v        = (int) eat_value_u32("y=");
-		glyph.width    = (int) eat_value_u32("width=");
-		glyph.height   = (int) eat_value_u32("height=");
-		glyph.xoffset  = (int) eat_value_u32("xoffset=");
-		glyph.yoffset  = (int) eat_value_u32("yoffset=");
-		glyph.xadvance = (int) eat_value_u32("xadvance=");
+		glyph.u        = eat_value_int("x=");
+		glyph.v        = eat_value_int("y=");
+		glyph.width    = eat_value_int("width=");
+		glyph.height   = eat_value_int("height=");
+		glyph.xoffset  = eat_value_int("xoffset=");
+		glyph.yoffset  = eat_value_int("yoffset=");
+		glyph.xadvance = eat_value_int("xadvance=");
 
 		font.glyphs[i] = glyph;
 	}
