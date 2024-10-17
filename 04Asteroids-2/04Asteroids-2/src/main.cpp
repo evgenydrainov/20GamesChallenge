@@ -6,7 +6,7 @@
 
 
 int main(int /*argc*/, char* /*argv*/[]) {
-	init_window_and_opengl("Asteroids", GAME_W, GAME_H, 2, false, 60);
+	init_window_and_opengl("Asteroids", GAME_W, GAME_H, 2, false);
 	defer { deinit_window_and_opengl(); };
 
 	init_package();
@@ -17,8 +17,6 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
 	game.init();
 	defer { game.deinit(); };
-
-	window.prev_time = get_time() - 1.0 / window.target_fps;
 
 	while (!window.should_quit) {
 		begin_frame();

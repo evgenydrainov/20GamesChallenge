@@ -3,6 +3,12 @@
 #include "common.h"
 #include "texture.h"
 
+/*
+* A basic 2D batch renderer.
+* 
+* Call break_batch() before making opengl calls or modifying renderer's matrices or renderer's current shader.
+*/
+
 constexpr size_t BATCH_MAX_QUADS    = 10'000;
 constexpr size_t VERTICES_PER_QUAD  = 4;
 constexpr size_t INDICES_PER_QUAD   = 6;
@@ -22,12 +28,6 @@ enum RenderMode {
 	MODE_TRIANGLES,
 };
 
-
-// 
-// A basic batch renderer.
-// 
-// Call break_batch() before making opengl calls or modifying renderer's matrices or renderer's current shader.
-// 
 struct Batch_Renderer {
 	u32 current_texture;
 	RenderMode current_mode;
@@ -53,7 +53,7 @@ struct Batch_Renderer {
 	int draw_calls;
 	size_t max_batch;
 
-	int curr_draw_calls;  // These values change during the frame
+	int curr_draw_calls;  // These values change during the frame, use draw_calls and max_batch for metrics
 	size_t curr_max_batch;
 };
 

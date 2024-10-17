@@ -61,8 +61,8 @@ static void GLAPIENTRY gl_debug_callback(GLenum source,
 
 
 void init_window_and_opengl(const char* title,
-							int width, int height, int init_scale,
-							bool vsync, double target_fps) {
+							int width, int height, int init_window_scale,
+							bool prefer_vsync) {
 	// SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
 	SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "system");
@@ -74,7 +74,7 @@ void init_window_and_opengl(const char* title,
 
 	window.handle = SDL_CreateWindow(title,
 									 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-									 width * init_scale, height * init_scale,
+									 width * init_window_scale, height * init_window_scale,
 									 SDL_WINDOW_OPENGL
 									 | SDL_WINDOW_RESIZABLE);
 	window.game_width  = width;
@@ -125,23 +125,17 @@ void init_window_and_opengl(const char* title,
 	}
 #endif
 
-	// specify either vsync or target_fps
-	Assert((vsync && target_fps == 0) || (!vsync && target_fps != 0));
+	// Decide on vsync.
+	{
+		window.vsync = prefer_vsync;
 
-	if (vsync) {
-		SDL_DisplayMode mode;
-		int display = SDL_GetWindowDisplayIndex(window.handle);
-		SDL_GetDesktopDisplayMode(display, &mode);
-
-		Assert(mode.refresh_rate != 0);
-		target_fps = (double) mode.refresh_rate;
+		char* env_use_vsync = SDL_getenv("USE_VSYNC"); // @Leak
+		if (env_use_vsync) {
+			window.vsync = (SDL_atoi(env_use_vsync) != 0);
+		}
 	}
 
-	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
-
-	window.vsync = vsync;
-	window.target_fps = target_fps;
-	window.prev_time = get_time() - 1.0 / target_fps;
+	SDL_GL_SetSwapInterval(window.vsync ? 1 : 0);
 
 	glDisable(GL_CULL_FACE);
 
@@ -161,7 +155,7 @@ void deinit_window_and_opengl() {
 	SDL_Quit();
 }
 
-void handle_event(SDL_Event* ev) {
+static void handle_event(SDL_Event* ev) {
 	switch (ev->type) {
 		case SDL_QUIT: {
 			window.should_quit = true;
@@ -193,18 +187,26 @@ void handle_event(SDL_Event* ev) {
 }
 
 void begin_frame() {
+	if (!window.prev_time_is_initialized) {
+		window.prev_time = get_time() - 1.0 / window.target_fps;
+
+		window.prev_time_is_initialized = true;
+	}
+
 	double time = get_time();
 
 	window.frame_end_time = time + (1.0 / window.target_fps);
 
-	window.delta = (float)((time - window.prev_time) * 60.0);
+	// Set delta.
+	{
+		window.delta = (float)((time - window.prev_time) * 60.0);
 
-	// 
-	// Clamp fps between (target_fps / 2, target_fps * 2) for now
-	// 
-	float min_delta = (float) (60.0 / (window.target_fps * 2.0));
-	float max_delta = (float) (60.0 / (window.target_fps / 2.0));
-	Clamp(&window.delta, min_delta, max_delta);
+		// 
+		// Don't go below 30 fps. No upper limit for now.
+		// 
+		float max_delta = 2.0f;
+		window.delta = min(window.delta, max_delta);
+	}
 
 	window.fps = (float)(1.0 / (time - window.prev_time));
 
